@@ -1,0 +1,389 @@
+---
+title: Routes
+---
+
+# Routes
+
+Routes are the building blocks of TanStack Router. Each route represents a URL pattern and defines what should happen when that URL is matched - including what to load, what to render, and how to handle errors.
+
+## Route Definition
+
+Routes are defined using the `createRoute` or `createFileRoute` functions from the router package.
+
+### Code-Based Routes
+
+```tsx
+import { createRoute } from '@tanstack/react-router'
+
+const postRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts/$postId',
+  component: PostComponent,
+})
+```
+
+### File-Based Routes
+
+```tsx
+// src/routes/posts.$postId.tsx
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/posts/$postId')({
+  component: PostComponent,
+})
+```
+
+File-based routes don't need `getParentRoute` - the parent is inferred from the file path.
+
+## Route Options
+
+Routes accept a comprehensive set of options to control their behavior.
+
+### Path and Identification
+
+```tsx
+const route = createRoute({
+  getParentRoute: () => parentRoute,
+  path: '/posts/$postId',    // URL pattern
+  // OR
+  id: 'posts-detail',        // Custom route ID (no path)
+})
+```
+
+Routes can have either:
+- A `path` - Creates a routable URL segment
+- An `id` - Creates a layout/wrapper route with no URL segment
+
+### Component Options
+
+Define what renders at different states:
+
+```tsx
+const route = createFileRoute('/posts/$postId')({
+  // Main component when route is ready
+  component: PostComponent,
+  
+  // Shows while data is loading
+  pendingComponent: () => <div>Loading post...</div>,
+  
+  // Shows when an error occurs
+  errorComponent: ({ error }) => <div>Error: {error.message}</div>,
+  
+  // Shows when no match found
+  notFoundComponent: () => <div>Post not found</div>,
+})
+```
+
+<Note>
+All component options support lazy loading. Use the `lazy` method to code-split components.
+</Note>
+
+## Path Parameters
+
+Path parameters capture dynamic segments from the URL.
+
+### Basic Parameters
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/posts/$postId')({
+  component: PostComponent,
+})
+
+function PostComponent() {
+  const { postId } = Route.useParams()
+  return <div>Post ID: {postId}</div>
+}
+```
+
+In the route definition at `packages/router-core/src/route.ts:169-172`, parameters are typed based on the path pattern:
+
+```typescript
+export type ResolveParams<
+  TPath extends string,
+  T = string,
+> = ResolveRequiredParams<TPath, T> & ResolveOptionalParams<TPath, T>
+```
+
+### Parsing Parameters
+
+Transform and validate parameters:
+
+```tsx
+export const Route = createFileRoute('/posts/$postId')({
+  params: {
+    parse: (params) => ({
+      postId: Number(params.postId),
+    }),
+    stringify: (params) => ({
+      postId: String(params.postId),
+    }),
+  },
+  component: PostComponent,
+})
+
+function PostComponent() {
+  const { postId } = Route.useParams()
+  // postId is now a number!
+  console.log(typeof postId) // "number"
+}
+```
+
+### Optional Parameters
+
+Make parameters optional with the `{-` syntax:
+
+```tsx
+// src/routes/posts.{-$postId}.tsx
+export const Route = createFileRoute('/posts/{-$postId}')({
+  component: () => {
+    const params = Route.useParams()
+    // params.postId is string | undefined
+    return params.postId ? <PostDetail /> : <PostList />
+  },
+})
+```
+
+## Search Parameter Validation
+
+Validate and type search parameters using any validation library:
+
+### With Zod
+
+```tsx
+import { z } from 'zod'
+import { createFileRoute } from '@tanstack/react-router'
+
+const searchSchema = z.object({
+  page: z.number().optional().default(1),
+  filter: z.string().optional(),
+  sort: z.enum(['asc', 'desc']).optional().default('asc'),
+})
+
+export const Route = createFileRoute('/posts')({
+  validateSearch: searchSchema,
+  component: PostsComponent,
+})
+
+function PostsComponent() {
+  const { page, filter, sort } = Route.useSearch()
+  // All values are fully typed!
+  return <div>Page {page}</div>
+}
+```
+
+### Manual Validation
+
+```tsx
+export const Route = createFileRoute('/posts')({
+  validateSearch: (search: Record<string, unknown>) => {
+    return {
+      page: Number(search.page ?? 1),
+      filter: (search.filter as string) || '',
+    }
+  },
+})
+```
+
+The `validateSearch` option is defined in `packages/router-core/src/route.ts:928`.
+
+## Route Context
+
+Provide data to child routes via context:
+
+```tsx
+export const Route = createFileRoute('/_auth')({
+  context: ({ context }) => ({
+    // Add to existing context
+    ...context,
+    user: getCurrentUser(),
+  }),
+  component: AuthLayout,
+})
+
+// Child route can access context
+export const ChildRoute = createFileRoute('/_auth/dashboard')({
+  beforeLoad: ({ context }) => {
+    console.log(context.user) // Available!
+  },
+})
+```
+
+## Lifecycle Hooks
+
+Routes have several lifecycle hooks that run at different times.
+
+### beforeLoad
+
+Runs before the route loads. Perfect for authentication checks:
+
+```tsx
+import { createFileRoute, redirect } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/_auth')({
+  beforeLoad: async ({ context, location }) => {
+    if (!context.auth.isAuthenticated) {
+      throw redirect({
+        to: '/login',
+        search: {
+          redirect: location.href,
+        },
+      })
+    }
+    
+    // Can return additional context
+    return {
+      user: await context.auth.getUser(),
+    }
+  },
+})
+```
+
+From `packages/router-core/src/route.ts:969-993`, `beforeLoad` receives:
+- `context` - Accumulated context from parent routes
+- `location` - Current location object
+- `params` - Path parameters
+- `search` - Validated search parameters
+- `abortController` - Signal for cancellation
+
+<Warning>
+If `beforeLoad` throws, the route loader will not run and navigation will be cancelled.
+</Warning>
+
+### Context Function
+
+Provides synchronous context to the route:
+
+```tsx
+export const Route = createFileRoute('/posts')({
+  context: ({ params }) => ({
+    queryClient: new QueryClient(),
+    postId: params.postId,
+  }),
+})
+```
+
+## Loading States
+
+Control how loading states are displayed:
+
+```tsx
+export const Route = createFileRoute('/posts')({
+  // Wait 1s before showing pending component
+  pendingMs: 1000,
+  
+  // Keep pending component visible for at least 500ms
+  pendingMinMs: 500,
+  
+  pendingComponent: () => <Spinner />,
+})
+```
+
+This prevents flashing loading states for fast requests.
+
+## Error Handling
+
+Handle errors at the route level:
+
+```tsx
+export const Route = createFileRoute('/posts/$postId')({
+  errorComponent: ({ error, reset }) => {
+    return (
+      <div>
+        <h2>Error loading post</h2>
+        <p>{error.message}</p>
+        <button onClick={reset}>Try Again</button>
+      </div>
+    )
+  },
+  
+  // Called when error is caught
+  onError: (error) => {
+    console.error('Route error:', error)
+    logToErrorService(error)
+  },
+})
+```
+
+## Code Splitting
+
+Lazy load route components and loaders:
+
+```tsx
+// src/routes/posts.$postId.tsx
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/posts/$postId')({
+  // Component loads on demand
+  component: () => <div>Loading...</div>,
+}).lazy(() => import('./posts.$postId.lazy').then(d => d.Route))
+```
+
+```tsx
+// src/routes/posts.$postId.lazy.tsx
+import { createLazyFileRoute } from '@tanstack/react-router'
+
+export const Route = createLazyFileRoute('/posts/$postId')({
+  component: PostComponent, // This is code-split
+})
+
+function PostComponent() {
+  return <div>Post detail</div>
+}
+```
+
+## Stale Time and Caching
+
+Control when route data is considered fresh:
+
+```tsx
+export const Route = createFileRoute('/posts')({
+  // Data fresh for 10 seconds
+  staleTime: 10_000,
+  
+  // Keep in cache for 5 minutes
+  gcTime: 5 * 60 * 1000,
+  
+  loader: async () => {
+    return fetchPosts()
+  },
+})
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use beforeLoad for authentication">
+    The `beforeLoad` hook is perfect for auth checks because it runs before the loader, preventing unnecessary data fetching for unauthorized users.
+  </Accordion>
+
+  <Accordion title="Validate search params with schemas">
+    Always validate search parameters with a schema library like Zod. This provides type safety and runtime validation in one step.
+  </Accordion>
+
+  <Accordion title="Code split heavy components">
+    Use the `lazy` method to split large components. This reduces initial bundle size and improves performance.
+  </Accordion>
+
+  <Accordion title="Provide meaningful error boundaries">
+    Every route should have an `errorComponent` to gracefully handle failures and provide recovery options.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Loaders" icon="database" href="./loaders">
+    Learn how to load data for your routes
+  </Card>
+  <Card title="Navigation" icon="compass" href="./navigation">
+    Discover navigation patterns and APIs
+  </Card>
+  <Card title="Type Safety" icon="shield" href="./type-safety">
+    Master type-safe routing patterns
+  </Card>
+  <Card title="Search Params" icon="magnifying-glass" href="./search-params">
+    Deep dive into search parameter handling
+  </Card>
+</CardGroup>

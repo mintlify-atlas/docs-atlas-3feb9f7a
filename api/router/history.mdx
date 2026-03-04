@@ -1,0 +1,426 @@
+---
+title: History API
+---
+
+# History
+
+History management for browser navigation, including browser history, hash history, and memory history.
+
+## RouterHistory
+
+The history interface used by TanStack Router.
+
+<ResponseField name="location" type="HistoryLocation">
+  The current location object.
+</ResponseField>
+
+<ResponseField name="length" type="number">
+  Number of entries in the history stack.
+</ResponseField>
+
+<ResponseField name="push" type="(path: string, state?: any) => void">
+  Push a new entry onto the history stack.
+  
+  ```tsx
+  history.push('/posts', { from: 'homepage' })
+  ```
+</ResponseField>
+
+<ResponseField name="replace" type="(path: string, state?: any) => void">
+  Replace the current history entry.
+  
+  ```tsx
+  history.replace('/login')
+  ```
+</ResponseField>
+
+<ResponseField name="go" type="(delta: number) => void">
+  Move through the history stack by a delta.
+  
+  ```tsx
+  history.go(-2)  // Go back 2 entries
+  history.go(1)   // Go forward 1 entry
+  ```
+</ResponseField>
+
+<ResponseField name="back" type="() => void">
+  Go back one entry in the history stack.
+  
+  ```tsx
+  history.back()
+  ```
+</ResponseField>
+
+<ResponseField name="forward" type="() => void">
+  Go forward one entry in the history stack.
+  
+  ```tsx
+  history.forward()
+  ```
+</ResponseField>
+
+<ResponseField name="subscribe" type="(callback: (event) => void) => () => void">
+  Subscribe to history changes. Returns unsubscribe function.
+  
+  ```tsx
+  const unsubscribe = history.subscribe((event) => {
+    console.log('Navigation:', event.location)
+  })
+  ```
+</ResponseField>
+
+<ResponseField name="block" type="(blocker: NavigationBlocker) => () => void">
+  Block navigation and show confirmation. Returns unblock function.
+  
+  ```tsx
+  const unblock = history.block(async ({ currentLocation, nextLocation }) => {
+    return window.confirm('Are you sure you want to leave?')
+  })
+  ```
+</ResponseField>
+
+<ResponseField name="createHref" type="(path: string) => string">
+  Create an href string from a path.
+  
+  ```tsx
+  const href = history.createHref('/posts')
+  ```
+</ResponseField>
+
+## HistoryLocation
+
+Represents a location in the history stack.
+
+<ResponseField name="href" type="string">
+  The full URL string.
+</ResponseField>
+
+<ResponseField name="pathname" type="string">
+  The path portion of the URL.
+</ResponseField>
+
+<ResponseField name="search" type="string">
+  The search/query string portion of the URL.
+</ResponseField>
+
+<ResponseField name="hash" type="string">
+  The hash portion of the URL.
+</ResponseField>
+
+<ResponseField name="state" type="HistoryState">
+  State associated with this history entry.
+</ResponseField>
+
+## createBrowserHistory
+
+Create a history object that uses the browser's History API.
+
+```tsx
+import { createBrowserHistory } from '@tanstack/react-router'
+
+const history = createBrowserHistory()
+
+const router = createRouter({
+  routeTree,
+  history
+})
+```
+
+### Options
+
+<ParamField path="window" type="Window">
+  The window object to use. Defaults to global window.
+</ParamField>
+
+## createHashHistory
+
+Create a history object that uses URL hash for navigation.
+
+```tsx
+import { createHashHistory } from '@tanstack/react-router'
+
+const history = createHashHistory()
+
+const router = createRouter({
+  routeTree,
+  history
+})
+```
+
+**Use case:** Useful for apps hosted on static file servers or when you can't configure server-side routing.
+
+### Options
+
+<ParamField path="window" type="Window">
+  The window object to use. Defaults to global window.
+</ParamField>
+
+## createMemoryHistory
+
+Create a history object that stores navigation in memory (no browser integration).
+
+```tsx
+import { createMemoryHistory } from '@tanstack/react-router'
+
+const history = createMemoryHistory({
+  initialEntries: ['/'],
+  initialIndex: 0
+})
+
+const router = createRouter({
+  routeTree,
+  history
+})
+```
+
+**Use case:** Testing, server-side rendering, or non-browser environments.
+
+### Options
+
+<ParamField path="initialEntries" type="string[]">
+  Initial history entries.
+  
+  **Default:** `['/']`
+</ParamField>
+
+<ParamField path="initialIndex" type="number">
+  Initial position in the history stack.
+  
+  **Default:** `0`
+</ParamField>
+
+## NavigationBlocker
+
+Interface for blocking navigation.
+
+<ParamField path="blockerFn" type="BlockerFn" required>
+  Function called when navigation is attempted.
+  
+  ```tsx
+  async ({ currentLocation, nextLocation, action }) => {
+    return window.confirm('Leave this page?')
+  }
+  ```
+</ParamField>
+
+<ParamField path="enableBeforeUnload" type="boolean | (() => boolean)">
+  Enable browser's beforeunload event.
+  
+  ```tsx
+  enableBeforeUnload: true
+  enableBeforeUnload: () => form.isDirty
+  ```
+</ParamField>
+
+## BlockerFn
+
+Function signature for navigation blockers.
+
+<ParamField path="args.currentLocation" type="HistoryLocation">
+  The current location.
+</ParamField>
+
+<ParamField path="args.nextLocation" type="HistoryLocation">
+  The location being navigated to.
+</ParamField>
+
+<ParamField path="args.action" type="'PUSH' | 'REPLACE' | 'POP'">
+  The type of navigation action.
+</ParamField>
+
+**Returns:** `boolean | Promise<boolean>` - True to allow navigation, false to block.
+
+## Examples
+
+### Basic Browser History
+
+```tsx
+import { createBrowserHistory, createRouter } from '@tanstack/react-router'
+
+const history = createBrowserHistory()
+
+const router = createRouter({
+  routeTree,
+  history,
+  basepath: '/app'
+})
+```
+
+### Hash History for Static Hosting
+
+```tsx
+import { createHashHistory } from '@tanstack/react-router'
+
+const history = createHashHistory()
+
+const router = createRouter({
+  routeTree,
+  history
+})
+
+// URLs will be like: https://example.com/#/posts/123
+```
+
+### Memory History for Testing
+
+```tsx
+import { createMemoryHistory } from '@tanstack/react-router'
+import { render } from '@testing-library/react'
+
+test('navigates to post detail', async () => {
+  const history = createMemoryHistory({
+    initialEntries: ['/posts']
+  })
+  
+  const router = createRouter({
+    routeTree,
+    history
+  })
+  
+  const { getByText } = render(
+    <RouterProvider router={router} />
+  )
+  
+  // Test navigation...
+})
+```
+
+### Navigation Blocking
+
+```tsx
+import { useBlocker } from '@tanstack/react-router'
+
+function EditForm() {
+  const [isDirty, setIsDirty] = useState(false)
+  
+  useBlocker({
+    blockerFn: async () => {
+      if (isDirty) {
+        return window.confirm(
+          'You have unsaved changes. Are you sure you want to leave?'
+        )
+      }
+      return true
+    },
+    enableBeforeUnload: isDirty
+  })
+  
+  return (
+    <form onChange={() => setIsDirty(true)}>
+      {/* form fields */}
+    </form>
+  )
+}
+```
+
+### Custom History Events
+
+```tsx
+import { createBrowserHistory } from '@tanstack/react-router'
+
+const history = createBrowserHistory()
+
+// Subscribe to all navigation events
+const unsubscribe = history.subscribe((event) => {
+  console.log('Navigation:', {
+    type: event.action.type,
+    location: event.location
+  })
+  
+  // Analytics tracking
+  analytics.track('pageview', {
+    path: event.location.pathname
+  })
+})
+
+// Clean up subscription
+unsubscribe()
+```
+
+### Programmatic Navigation
+
+```tsx
+function useCustomNavigation() {
+  const router = useRouter()
+  const history = router.history
+  
+  const navigateBack = () => {
+    if (history.length > 1) {
+      history.back()
+    } else {
+      history.push('/')
+    }
+  }
+  
+  const navigateToLogin = () => {
+    history.push('/login', {
+      returnTo: router.state.location.pathname
+    })
+  }
+  
+  return { navigateBack, navigateToLogin }
+}
+```
+
+### Server-Side Rendering
+
+```tsx
+import { createMemoryHistory } from '@tanstack/react-router'
+
+export async function renderToString(url: string) {
+  const history = createMemoryHistory({
+    initialEntries: [url]
+  })
+  
+  const router = createRouter({
+    routeTree,
+    history
+  })
+  
+  await router.load()
+  
+  return renderToString(
+    <RouterProvider router={router} />
+  )
+}
+```
+
+### Custom History Implementation
+
+```tsx
+import { createHistory } from '@tanstack/history'
+
+const customHistory = createHistory({
+  getLocation: () => ({
+    href: window.location.href,
+    pathname: window.location.pathname,
+    search: window.location.search,
+    hash: window.location.hash,
+    state: window.history.state || {}
+  }),
+  
+  getLength: () => window.history.length,
+  
+  pushState: (path, state) => {
+    window.history.pushState(state, '', path)
+  },
+  
+  replaceState: (path, state) => {
+    window.history.replaceState(state, '', path)
+  },
+  
+  go: (delta) => {
+    window.history.go(delta)
+  },
+  
+  back: () => {
+    window.history.back()
+  },
+  
+  forward: () => {
+    window.history.forward()
+  },
+  
+  createHref: (path) => path
+})
+```

@@ -1,0 +1,519 @@
+---
+title: Solid Start
+description: Build full-stack applications with SolidJS and TanStack Start
+---
+
+# Solid Start
+
+TanStack Start provides full support for SolidJS, enabling you to build type-safe, full-stack applications with Solid's fine-grained reactivity.
+
+## Overview
+
+Solid Start combines:
+- **SolidJS** - Fine-grained reactive UI library
+- **TanStack Router** - Type-safe routing with search params
+- **TanStack Start** - Server functions and full-stack capabilities
+
+## Installation
+
+```bash
+npm install @tanstack/solid-start @tanstack/solid-router
+```
+
+## Server Functions
+
+Create server functions with `createServerFn`:
+
+```tsx
+import { createServerFn } from '@tanstack/solid-start'
+import { z } from 'zod'
+
+const fetchUser = createServerFn({ method: 'GET' })
+  .inputValidator((id: string) => id)
+  .handler(async ({ data }) => {
+    const user = await db.user.findUnique({ where: { id: data } })
+    return user
+  })
+```
+
+### Using in Route Loaders
+
+```tsx
+import { createFileRoute } from '@tanstack/solid-router'
+import { fetchUser } from '~/utils/users'
+
+export const Route = createFileRoute('/users/$userId')({  
+  loader: async ({ params }) => {
+    const user = await fetchUser({ data: params.userId })
+    return { user }
+  },
+  component: UserProfile,
+})
+
+function UserProfile() {
+  const data = Route.useLoaderData()
+  return <div>User: {data().user.name}</div>
+}
+```
+
+### POST Mutations
+
+```tsx
+import { createServerFn } from '@tanstack/solid-start'
+import { z } from 'zod'
+
+const updateProfile = createServerFn({ method: 'POST' })
+  .inputValidator((data: { name: string; email: string }) => data)
+  .handler(async ({ data }) => {
+    await db.user.update({ where: { id: 1 }, data })
+    return { success: true }
+  })
+```
+
+## useServerFn Hook
+
+Use `useServerFn` to call server functions from components with automatic redirect handling:
+
+```tsx
+import { useServerFn } from '@tanstack/solid-start'
+import { updateProfile } from '~/utils/users'
+
+function ProfileEditor() {
+  const updateProfileFn = useServerFn(updateProfile)
+  const [pending, setPending] = createSignal(false)
+  
+  const handleSave = async () => {
+    setPending(true)
+    try {
+      await updateProfileFn({
+        data: { name: 'John', email: 'john@example.com' }
+      })
+    } finally {
+      setPending(false)
+    }
+  }
+  
+  return (
+    <button onClick={handleSave} disabled={pending()}>
+      {pending() ? 'Saving...' : 'Save'}
+    </button>
+  )
+}
+```
+
+## Components
+
+### StartClient
+
+The root client component for Solid applications:
+
+```tsx
+// src/entry-client.tsx
+import { StartClient } from '@tanstack/solid-start/client'
+import { hydrate } from 'solid-js/web'
+
+hydrate(() => <StartClient />, document.getElementById('root')!)
+```
+
+### StartServer
+
+The root server component for SSR:
+
+```tsx
+// src/entry-server.tsx
+import { StartServer } from '@tanstack/solid-start/server'
+import { renderToString } from 'solid-js/web'
+
+export async function render(request: Request) {
+  const router = createRouter()
+  // ... setup router
+  
+  const html = renderToString(() => <StartServer router={router} />)
+  return new Response(html, {
+    headers: { 'Content-Type': 'text/html' },
+  })
+}
+```
+
+## Routing
+
+### File-Based Routes
+
+Organize routes in the `src/routes` directory:
+
+```
+src/
+  routes/
+    __root.tsx          # Root route
+    index.tsx           # /
+    about.tsx           # /about
+    posts/
+      index.tsx         # /posts
+      $postId.tsx       # /posts/:postId
+```
+
+### Root Route
+
+```tsx
+// src/routes/__root.tsx
+import { createRootRoute } from '@tanstack/solid-router'
+import { HydrationScript } from 'solid-js/web'
+import { HeadContent, Scripts } from '@tanstack/solid-router'
+
+export const Route = createRootRoute({
+  head: () => ({
+    meta: [
+      { charset: 'utf-8' },
+      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+    ],
+  }),
+  shellComponent: ({ children }) => (
+    <html>
+      <head>
+        <HydrationScript />
+      </head>
+      <body>
+        <HeadContent />
+        {children}
+        <Scripts />
+      </body>
+    </html>
+  ),
+})
+```
+
+### Dynamic Routes
+
+```tsx
+// src/routes/posts/$postId.tsx
+import { createFileRoute } from '@tanstack/solid-router'
+import { fetchPost } from '~/utils/posts'
+
+export const Route = createFileRoute('/posts/$postId')({  
+  loader: async ({ params }) => {
+    const post = await fetchPost({ data: params.postId })
+    return { post }
+  },
+  component: PostPage,
+})
+
+function PostPage() {
+  const data = Route.useLoaderData()
+  return (
+    <article>
+      <h1>{data().post.title}</h1>
+      <p>{data().post.body}</p>
+    </article>
+  )
+}
+```
+
+## Reactivity
+
+### Signals in Server Functions
+
+Solid's signals work seamlessly with server functions:
+
+```tsx
+import { createSignal } from 'solid-js'
+import { useServerFn } from '@tanstack/solid-start'
+import { searchUsers } from '~/utils/users'
+
+function UserSearch() {
+  const [query, setQuery] = createSignal('')
+  const [results, setResults] = createSignal([])
+  const searchFn = useServerFn(searchUsers)
+  
+  const handleSearch = async () => {
+    const data = await searchFn({ data: { query: query() } })
+    setResults(data)
+  }
+  
+  return (
+    <div>
+      <input
+        value={query()}
+        onInput={(e) => setQuery(e.currentTarget.value)}
+      />
+      <button onClick={handleSearch}>Search</button>
+      <For each={results()}>
+        {(user) => <div>{user.name}</div>}
+      </For>
+    </div>
+  )
+}
+```
+
+### Resources
+
+Use `createResource` for async data with Suspense:
+
+```tsx
+import { createResource, Suspense } from 'solid-js'
+import { useServerFn } from '@tanstack/solid-start'
+import { fetchUsers } from '~/utils/users'
+
+function UserList() {
+  const fetchUsersFn = useServerFn(fetchUsers)
+  const [users] = createResource(async () => {
+    return fetchUsersFn()
+  })
+  
+  return (
+    <Suspense fallback={<div>Loading users...</div>}>
+      <For each={users()}>
+        {(user) => <div>{user.name}</div>}
+      </For>
+    </Suspense>
+  )
+}
+```
+
+## Data Loading
+
+### Deferred Loading
+
+```tsx
+import { Suspense } from 'solid-js'
+import { Await, createFileRoute } from '@tanstack/solid-router'
+import { fetchPost, fetchComments } from '~/utils/posts'
+
+export const Route = createFileRoute('/posts/$postId')({  
+  loader: async ({ params }) => ({
+    post: await fetchPost({ data: params.postId }),
+    // Deferred - loads after initial render
+    comments: fetchComments({ data: params.postId }),
+  }),
+  component: PostWithComments,
+})
+
+function PostWithComments() {
+  const data = Route.useLoaderData()
+  
+  return (
+    <div>
+      <h1>{data().post.title}</h1>
+      <Suspense fallback={<div>Loading comments...</div>}>
+        <Await promise={data().comments}>
+          {(comments) => (
+            <For each={comments}>
+              {(comment) => <div>{comment.text}</div>}
+            </For>
+          )}
+        </Await>
+      </Suspense>
+    </div>
+  )
+}
+```
+
+## Forms
+
+### Progressive Enhancement
+
+```tsx
+import { useServerFn } from '@tanstack/solid-start'
+import { createSignal } from 'solid-js'
+import { createUser } from '~/utils/users'
+
+function SignupForm() {
+  const createUserFn = useServerFn(createUser)
+  const [pending, setPending] = createSignal(false)
+  
+  const handleSubmit = async (e: SubmitEvent) => {
+    e.preventDefault()
+    setPending(true)
+    
+    const formData = new FormData(e.currentTarget as HTMLFormElement)
+    try {
+      await createUserFn({
+        data: {
+          email: formData.get('email'),
+          password: formData.get('password'),
+        },
+      })
+    } finally {
+      setPending(false)
+    }
+  }
+  
+  return (
+    <form onSubmit={handleSubmit}>
+      <input name="email" type="email" required />
+      <input name="password" type="password" required />
+      <button type="submit" disabled={pending()}>
+        {pending() ? 'Creating...' : 'Sign Up'}
+      </button>
+    </form>
+  )
+}
+```
+
+## Middleware
+
+### Authentication Middleware
+
+```tsx
+import { createMiddleware } from '@tanstack/solid-start'
+import { redirect } from '@tanstack/solid-router'
+
+const authMiddleware = createMiddleware({ type: 'function' })
+  .server(async ({ next, context }) => {
+    const session = await getSession(context.request)
+    if (!session) {
+      throw redirect({ to: '/login' })
+    }
+    return next({ context: { user: session.user } })
+  })
+
+const getProfile = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    return { name: context.user.name }
+  })
+```
+
+## Client-Only Code
+
+Mark browser-only modules:
+
+```tsx
+import '@tanstack/solid-start/client-only'
+import { createSignal, onMount } from 'solid-js'
+
+export function useLocalStorage(key: string) {
+  const [value, setValue] = createSignal(localStorage.getItem(key))
+  
+  onMount(() => {
+    localStorage.setItem(key, value() ?? '')
+  })
+  
+  return [value, setValue] as const
+}
+```
+
+## Server-Only Code
+
+Mark server-only modules:
+
+```tsx
+import '@tanstack/solid-start/server-only'
+import { db } from '~/db'
+
+export async function getUsers() {
+  return db.user.findMany()
+}
+```
+
+## Error Handling
+
+```tsx
+import { createFileRoute, ErrorComponent } from '@tanstack/solid-router'
+
+export const Route = createFileRoute('/')({  
+  errorComponent: ({ error }) => (
+    <div>
+      <h1>Error</h1>
+      <pre>{error.message}</pre>
+    </div>
+  ),
+})
+```
+
+## Streaming
+
+Stream responses with `RawStream`:
+
+```tsx
+import { createServerFn, RawStream } from '@tanstack/solid-start'
+
+const streamData = createServerFn({ method: 'GET' }).handler(async () => {
+  return new RawStream(async (controller) => {
+    for (let i = 0; i < 10; i++) {
+      controller.send(`Chunk ${i}\n`)
+      await new Promise(r => setTimeout(r, 100))
+    }
+    controller.end()
+  })
+})
+```
+
+## Best Practices
+
+### Use Fine-Grained Reactivity
+
+Leverage Solid's fine-grained updates:
+
+```tsx
+const [user, setUser] = createSignal({ name: 'John', age: 30 })
+
+// ✅ Good - only updates name
+setUser({ ...user(), name: 'Jane' })
+
+// ✅ Even better - use stores for nested reactivity
+const [user, setUser] = createStore({ name: 'John', age: 30 })
+setUser('name', 'Jane')
+```
+
+### Suspense for Loading States
+
+Use Suspense boundaries:
+
+```tsx
+<Suspense fallback={<Loading />}>
+  <AsyncComponent />
+</Suspense>
+```
+
+### Combine with Solid Query
+
+Use Solid Query for advanced data fetching:
+
+```tsx
+import { createQuery } from '@tanstack/solid-query'
+import { useServerFn } from '@tanstack/solid-start'
+
+function UserProfile() {
+  const fetchUserFn = useServerFn(fetchUser)
+  const query = createQuery(() => ({
+    queryKey: ['user', userId],
+    queryFn: async () => fetchUserFn({ data: userId }),
+  }))
+  
+  return (
+    <Show when={query.data}>
+      {(user) => <div>{user().name}</div>}
+    </Show>
+  )
+}
+```
+
+## API Reference
+
+### Solid-Specific Exports
+
+All exports from `@tanstack/solid-start`:
+
+```tsx
+import {
+  createServerFn,      // Create server functions
+  createMiddleware,    // Create middleware
+  useServerFn,         // Use server functions in components
+  RawStream,           // Stream responses
+  // ... all other Start exports
+} from '@tanstack/solid-start'
+```
+
+### Differences from React
+
+1. **Signals instead of State**: Use `createSignal` instead of `useState`
+2. **No useEffect**: Use `createEffect` or `onMount`
+3. **Control Flow**: Use `<Show>`, `<For>`, `<Switch>` instead of conditional rendering
+4. **Fine-grained Reactivity**: Updates are more granular and efficient
+
+## Related
+
+- [SolidJS Documentation](https://www.solidjs.com/)
+- [TanStack Router](https://tanstack.com/router)
+- [TanStack Query](https://tanstack.com/query)
+- [React Start](/start/react/server-functions) - React version for comparison

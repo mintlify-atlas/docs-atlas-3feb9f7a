@@ -1,0 +1,440 @@
+---
+title: Server-Side Rendering (SSR)
+---
+
+# Server-Side Rendering (SSR)
+
+Server-Side Rendering (SSR) improves initial page load performance and SEO by rendering your application on the server. TanStack Router provides full SSR support through TanStack Start.
+
+## Overview
+
+SSR with TanStack Router:
+- Renders HTML on the server for faster initial loads
+- Provides full hydration support
+- Enables streaming SSR for progressive rendering
+- Supports data loading on the server
+- Works with React Server Components (RSC)
+
+<Note>
+  For full SSR support with TanStack Router, use **TanStack Start** - the official full-stack framework built on TanStack Router.
+</Note>
+
+## TanStack Start
+
+TanStack Start is the recommended way to use SSR with TanStack Router:
+
+```bash
+npm create @tanstack/start@latest
+```
+
+Start provides:
+- File-based routing with SSR out of the box
+- Server functions
+- API routes
+- Streaming SSR
+- React Server Components support
+
+## Basic SSR Setup
+
+### Root Route with SSR
+
+```tsx src/routes/__root.tsx
+import {
+  createRootRoute,
+  HeadContent,
+  Scripts,
+} from '@tanstack/react-router'
+import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
+
+export const Route = createRootRoute({
+  head: () => ({
+    meta: [
+      {
+        charSet: 'utf-8',
+      },
+      {
+        name: 'viewport',
+        content: 'width=device-width, initial-scale=1',
+      },
+      {
+        title: 'My App',
+      },
+    ],
+    links: [
+      { rel: 'stylesheet', href: '/styles.css' },
+    ],
+  }),
+  shellComponent: RootDocument,
+})
+
+function RootDocument({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <head>
+        <HeadContent />
+      </head>
+      <body>
+        {children}
+        <Scripts />
+        <TanStackRouterDevtools position="bottom-right" />
+      </body>
+    </html>
+  )
+}
+```
+
+### Server-Side Data Loading
+
+Load data on the server before rendering:
+
+```tsx src/routes/posts.tsx
+import { createFileRoute } from '@tanstack/react-router'
+import { fetchPosts } from '../utils/posts'
+
+export const Route = createFileRoute('/posts')({
+  loader: async () => {
+    // This runs on the server during SSR
+    const posts = await fetchPosts()
+    return { posts }
+  },
+  component: PostsComponent,
+})
+
+function PostsComponent() {
+  const { posts } = Route.useLoaderData()
+  
+  return (
+    <div>
+      <h1>Posts</h1>
+      <ul>
+        {posts.map((post) => (
+          <li key={post.id}>{post.title}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+```
+
+## Server Functions
+
+Define functions that only run on the server:
+
+```tsx src/routes/users.tsx
+import { createFileRoute } from '@tanstack/react-router'
+import { createServerFn } from '@tanstack/start'
+
+// Server function - runs only on server
+const getUsers = createServerFn('GET', async () => {
+  // Direct database access (server-only)
+  const users = await db.users.findMany()
+  return users
+})
+
+export const Route = createFileRoute('/users')({
+  loader: () => getUsers(),
+  component: UsersComponent,
+})
+
+function UsersComponent() {
+  const users = Route.useLoaderData()
+  
+  return (
+    <ul>
+      {users.map((user) => (
+        <li key={user.id}>{user.name}</li>
+      ))}
+    </ul>
+  )
+}
+```
+
+## API Routes
+
+Create API endpoints:
+
+```tsx src/routes/api/posts.ts
+import { createAPIFileRoute } from '@tanstack/start'
+import { db } from '../../db'
+
+export const Route = createAPIFileRoute('/api/posts')({
+  GET: async ({ request }) => {
+    const posts = await db.posts.findMany()
+    return Response.json(posts)
+  },
+  
+  POST: async ({ request }) => {
+    const body = await request.json()
+    const post = await db.posts.create({
+      data: body,
+    })
+    return Response.json(post, { status: 201 })
+  },
+})
+```
+
+## Streaming SSR
+
+Stream HTML as it's generated for faster time-to-first-byte:
+
+```tsx src/routes/dashboard.tsx
+import { createFileRoute } from '@tanstack/react-router'
+import { Suspense } from 'react'
+
+export const Route = createFileRoute('/dashboard')({
+  component: DashboardComponent,
+})
+
+function DashboardComponent() {
+  return (
+    <div>
+      <h1>Dashboard</h1>
+      
+      {/* This component streams in when data is ready */}
+      <Suspense fallback={<div>Loading stats...</div>}>
+        <DashboardStats />
+      </Suspense>
+      
+      <Suspense fallback={<div>Loading activity...</div>}>
+        <RecentActivity />
+      </Suspense>
+    </div>
+  )
+}
+
+async function DashboardStats() {
+  const stats = await fetchStats() // Server-side async component
+  return <div>{/* Render stats */}</div>
+}
+```
+
+## Deferred Data Loading
+
+Defer non-critical data to speed up initial render:
+
+```tsx src/routes/posts/$postId.tsx
+import { createFileRoute } from '@tanstack/react-router'
+import { defer, Await } from '@tanstack/react-router'
+import { Suspense } from 'react'
+
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    // Load critical data immediately
+    const post = await fetchPost(params.postId)
+    
+    // Defer non-critical data
+    const commentsPromise = fetchComments(params.postId)
+    const relatedPostsPromise = fetchRelatedPosts(params.postId)
+    
+    return {
+      post,
+      comments: defer(commentsPromise),
+      relatedPosts: defer(relatedPostsPromise),
+    }
+  },
+  component: PostComponent,
+})
+
+function PostComponent() {
+  const { post, comments, relatedPosts } = Route.useLoaderData()
+  
+  return (
+    <article>
+      {/* Post renders immediately */}
+      <h1>{post.title}</h1>
+      <p>{post.body}</p>
+      
+      {/* Comments stream in when ready */}
+      <Suspense fallback={<div>Loading comments...</div>}>
+        <Await promise={comments}>
+          {(comments) => (
+            <Comments comments={comments} />
+          )}
+        </Await>
+      </Suspense>
+      
+      {/* Related posts stream in when ready */}
+      <Suspense fallback={<div>Loading related posts...</div>}>
+        <Await promise={relatedPosts}>
+          {(posts) => <RelatedPosts posts={posts} />}
+        </Await>
+      </Suspense>
+    </article>
+  )
+}
+```
+
+## Meta Tags and SEO
+
+Dynamic meta tags for SEO:
+
+```tsx src/routes/posts/$postId.tsx
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    const post = await fetchPost(params.postId)
+    return { post }
+  },
+  head: ({ loaderData }) => ({
+    meta: [
+      {
+        title: loaderData.post.title,
+      },
+      {
+        name: 'description',
+        content: loaderData.post.excerpt,
+      },
+      {
+        property: 'og:title',
+        content: loaderData.post.title,
+      },
+      {
+        property: 'og:description',
+        content: loaderData.post.excerpt,
+      },
+      {
+        property: 'og:image',
+        content: loaderData.post.coverImage,
+      },
+    ],
+  }),
+  component: PostComponent,
+})
+```
+
+## Environment-Specific Code
+
+Run code only on server or client:
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router'
+import { isServer } from '@tanstack/start'
+
+export const Route = createFileRoute('/analytics')({
+  loader: async () => {
+    if (isServer) {
+      // Server-only code
+      const data = await fetchFromDatabase()
+      return data
+    } else {
+      // Client-only code
+      const data = await fetchFromAPI()
+      return data
+    }
+  },
+})
+```
+
+## Error Handling in SSR
+
+Handle errors during server rendering:
+
+```tsx src/routes/posts/$postId.tsx
+import { createFileRoute } from '@tanstack/react-router'
+import { ErrorComponent } from '@tanstack/react-router'
+import { NotFoundError } from '../../utils/errors'
+
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    try {
+      const post = await fetchPost(params.postId)
+      if (!post) {
+        throw new NotFoundError('Post not found')
+      }
+      return { post }
+    } catch (error) {
+      // Error is caught and rendered by errorComponent
+      throw error
+    }
+  },
+  errorComponent: ({ error }) => {
+    if (error instanceof NotFoundError) {
+      return <div>Post not found</div>
+    }
+    return <ErrorComponent error={error} />
+  },
+})
+```
+
+## Static Site Generation (SSG)
+
+Generate static HTML at build time:
+
+```tsx
+// In your build configuration
+import { generateStaticPages } from '@tanstack/start'
+
+await generateStaticPages({
+  routeTree,
+  paths: [
+    '/',
+    '/about',
+    '/contact',
+  ],
+})
+```
+
+## Hydration
+
+TanStack Router automatically handles hydration:
+
+```tsx src/main.tsx
+import { hydrateRoot } from 'react-dom/client'
+import { StartClient } from '@tanstack/start'
+import { createRouter } from './router'
+
+const router = createRouter()
+
+hydrateRoot(document, <StartClient router={router} />)
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Server Functions" icon="server">
+    Keep database queries and sensitive logic in server functions
+  </Card>
+  
+  <Card title="Defer Non-Critical Data" icon="clock">
+    Use defer() for data that isn't needed immediately
+  </Card>
+  
+  <Card title="Optimize Images" icon="image">
+    Use optimized image components and lazy loading
+  </Card>
+  
+  <Card title="Cache Aggressively" icon="database">
+    Cache server responses to reduce load times
+  </Card>
+</CardGroup>
+
+<Note>
+  **Performance**: SSR improves initial page load but adds server processing time. Use streaming and deferred data to optimize.
+</Note>
+
+<Warning>
+  **Client-only APIs**: Avoid using browser APIs (window, document) in code that runs on the server. Use environment checks.
+</Warning>
+
+## Deployment
+
+Deploy SSR apps to platforms that support Node.js:
+
+- **Vercel**: Zero-config deployment
+- **Netlify**: Edge functions support
+- **Cloudflare Workers**: Edge runtime
+- **AWS**: Lambda or EC2
+- **Any Node.js host**: VPS, containers, etc.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="TanStack Start Docs" href="/start">
+    Learn more about TanStack Start
+  </Card>
+  
+  <Card title="Code Splitting" href="./code-splitting">
+    Optimize bundle size with lazy loading
+  </Card>
+</CardGroup>

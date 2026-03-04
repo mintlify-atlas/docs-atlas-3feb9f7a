@@ -1,0 +1,245 @@
+---
+title: Routing
+---
+
+# Routing
+
+TanStack Router provides a powerful and flexible routing system that supports both file-based and code-based routing patterns. At its core, routing is about matching URL patterns to route definitions and rendering the appropriate components.
+
+## Why Routing Matters
+
+Routing is the backbone of any single-page application (SPA). TanStack Router takes routing beyond simple URL matching by providing:
+
+- **Type-safe navigation** - Full TypeScript inference for paths, params, and search
+- **Nested routing** - Parent-child route relationships with shared layouts
+- **Automatic code splitting** - Route-level lazy loading out of the box
+- **Framework agnostic core** - Works with React, Solid, and other frameworks
+
+## Route Tree Structure
+
+Routes in TanStack Router are organized as a tree structure, with each route potentially having child routes. This creates a hierarchy that matches your application's UI structure.
+
+```tsx
+import { createRouter, createRootRoute, createRoute } from '@tanstack/react-router'
+
+// Root route - the top of the tree
+const rootRoute = createRootRoute({
+  component: () => (
+    <div>
+      <h1>My App</h1>
+      <Outlet /> {/* Child routes render here */}
+    </div>
+  ),
+})
+
+// Parent route with path
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts',
+  component: () => (
+    <div>
+      <h2>Posts</h2>
+      <Outlet /> {/* Nested child routes */}
+    </div>
+  ),
+})
+
+// Child route
+const postRoute = createRoute({
+  getParentRoute: () => postsRoute,
+  path: '$postId',
+  component: () => <div>Post Detail</div>,
+})
+
+// Combine into a tree
+const routeTree = rootRoute.addChildren([postsRoute.addChildren([postRoute])])
+
+// Create the router
+const router = createRouter({ routeTree })
+```
+
+The route tree above creates these accessible paths:
+- `/posts` - Shows the posts list layout
+- `/posts/123` - Shows post 123 detail inside the posts layout
+
+## File-Based Routing
+
+TanStack Router excels at file-based routing, where your file structure automatically defines your routes. This is powered by the route generator.
+
+<Note>
+File-based routing requires the TanStack Router plugin for your bundler (Vite, Webpack, etc.)
+</Note>
+
+### File Route Conventions
+
+File routes use a naming convention to define route structure:
+
+```
+src/routes/
+  __root.tsx           -> / (root layout)
+  index.tsx            -> / (home page)
+  posts.tsx            -> /posts (layout)
+  posts.index.tsx      -> /posts (list)
+  posts.$postId.tsx    -> /posts/:postId (detail)
+  _auth.tsx            -> Layout route (no path)
+  _auth.dashboard.tsx  -> /dashboard (with layout)
+```
+
+Key patterns:
+- `$` prefix indicates a path parameter
+- `_` prefix creates a layout route without adding to the path
+- `.` separates nested route segments
+- `index` creates the default route for that level
+
+### Creating File Routes
+
+File routes are created using `createFileRoute`:
+
+```tsx
+// src/routes/posts.$postId.tsx
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/posts/$postId')({
+  component: PostComponent,
+})
+
+function PostComponent() {
+  const { postId } = Route.useParams()
+  return <div>Post {postId}</div>
+}
+```
+
+The route path in `createFileRoute` must match the file location for type safety.
+
+## Path Matching
+
+TanStack Router matches URLs to routes using several strategies:
+
+### Static Paths
+
+Exact string matches:
+
+```tsx
+path: '/about'      // Matches /about
+path: '/posts/new'  // Matches /posts/new
+```
+
+### Path Parameters
+
+Dynamic segments that capture values:
+
+```tsx
+path: '/posts/$postId'           // Matches /posts/123
+path: '/users/$userId/posts/$id' // Matches /users/42/posts/99
+```
+
+Parameters are available via `useParams()` or in route options.
+
+### Optional Parameters
+
+Parameters that may or may not be present:
+
+```tsx
+path: '/posts/{-$postId}' // Matches /posts and /posts/123
+```
+
+The `{-` syntax makes the parameter optional.
+
+### Splat Routes
+
+Capture remaining path segments:
+
+```tsx
+path: '/files/$'  // Matches /files/any/nested/path
+```
+
+Access via the `_splat` parameter.
+
+## Route Ranking
+
+When multiple routes could match a URL, TanStack Router uses a ranking system:
+
+1. **Static segments** rank highest
+2. **Path parameters** rank in the middle  
+3. **Splat routes** rank lowest
+
+This ensures `/posts/new` matches before `/posts/$postId`.
+
+## Basepath
+
+Mount your entire router at a subpath:
+
+```tsx
+const router = createRouter({
+  routeTree,
+  basepath: '/app',
+})
+```
+
+Now `/posts` becomes `/app/posts`.
+
+## Trailing Slashes
+
+Control how trailing slashes are handled:
+
+```tsx
+const router = createRouter({
+  routeTree,
+  trailingSlash: 'never', // Remove trailing slashes
+  // trailingSlash: 'always', // Add trailing slashes
+  // trailingSlash: 'preserve', // Keep as-is
+})
+```
+
+## Case Sensitivity
+
+By default, routes are case-insensitive. Make them case-sensitive globally:
+
+```tsx
+const router = createRouter({
+  routeTree,
+  caseSensitive: true,
+})
+```
+
+Or per-route:
+
+```tsx
+const route = createRoute({
+  path: '/Posts',
+  caseSensitive: true,
+})
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use file-based routing for scalability">
+    File-based routing keeps your routes organized and co-locates route logic with route definitions. It scales better than managing a large route tree manually.
+  </Accordion>
+
+  <Accordion title="Keep route trees shallow when possible">
+    Deep nesting can make navigation complex. Consider flattening routes with layout routes (underscore prefix) instead of deeply nested paths.
+  </Accordion>
+
+  <Accordion title="Use meaningful route names">
+    Route IDs are generated from paths. Clear, semantic paths lead to better type inference and developer experience.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Routes" icon="route" href="./routes">
+    Learn about route options, lifecycle, and configuration
+  </Card>
+  <Card title="Navigation" icon="compass" href="./navigation">
+    Discover how to navigate between routes
+  </Card>
+  <Card title="Type Safety" icon="shield" href="./type-safety">
+    Explore TanStack Router's type-safe routing features
+  </Card>
+  <Card title="Search Params" icon="magnifying-glass" href="./search-params">
+    Master type-safe search parameter handling
+  </Card>
+</CardGroup>

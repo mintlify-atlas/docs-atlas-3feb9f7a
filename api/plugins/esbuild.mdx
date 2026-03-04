@@ -1,0 +1,144 @@
+---
+title: ESBuild Plugin API
+---
+
+# ESBuild Plugin
+
+ESBuild plugin for TanStack Router with route generation.
+
+## Installation
+
+```bash
+npm install @tanstack/router-plugin
+```
+
+## Basic Usage
+
+```js
+// build.js
+import { build } from 'esbuild'
+import { TanStackRouterEsbuild } from '@tanstack/router-plugin/esbuild'
+
+await build({
+  entryPoints: ['src/index.tsx'],
+  bundle: true,
+  outfile: 'dist/bundle.js',
+  plugins: [
+    TanStackRouterEsbuild()
+  ]
+})
+```
+
+## Configuration Options
+
+Same options as the Vite plugin:
+
+<ParamField path="routesDirectory" type="string">
+  Directory containing route files.
+  
+  **Default:** `'./src/routes'`
+</ParamField>
+
+<ParamField path="generatedRouteTree" type="string">
+  Output path for generated route tree.
+  
+  **Default:** `'./src/routeTree.gen.ts'`
+</ParamField>
+
+<ParamField path="routeFileIgnorePrefix" type="string">
+  Prefix to ignore when generating routes.
+  
+  **Default:** `'-'`
+</ParamField>
+
+<ParamField path="autoCodeSplitting" type="boolean">
+  Enable automatic code splitting.
+  
+  **Default:** `false`
+</ParamField>
+
+## Examples
+
+### Basic Setup
+
+```js
+import { build } from 'esbuild'
+import { TanStackRouterEsbuild } from '@tanstack/router-plugin/esbuild'
+
+await build({
+  entryPoints: ['src/index.tsx'],
+  bundle: true,
+  outdir: 'dist',
+  format: 'esm',
+  splitting: true,
+  plugins: [
+    TanStackRouterEsbuild()
+  ]
+})
+```
+
+### With Code Splitting
+
+```js
+import { TanStackRouterEsbuild } from '@tanstack/router-plugin/esbuild'
+
+await build({
+  entryPoints: ['src/index.tsx'],
+  bundle: true,
+  outdir: 'dist',
+  format: 'esm',
+  splitting: true,
+  plugins: [
+    TanStackRouterEsbuild({
+      autoCodeSplitting: true,
+      codeSplittingOptions: {
+        defaultBehavior: [
+          ['component'],
+          ['loader']
+        ]
+      }
+    })
+  ]
+})
+```
+
+### Watch Mode
+
+```js
+import { context } from 'esbuild'
+import { TanStackRouterEsbuild } from '@tanstack/router-plugin/esbuild'
+
+const ctx = await context({
+  entryPoints: ['src/index.tsx'],
+  bundle: true,
+  outdir: 'dist',
+  plugins: [
+    TanStackRouterEsbuild()
+  ]
+})
+
+await ctx.watch()
+console.log('Watching for changes...')
+```
+
+### Development Server
+
+```js
+import { context } from 'esbuild'
+import { TanStackRouterEsbuild } from '@tanstack/router-plugin/esbuild'
+
+const ctx = await context({
+  entryPoints: ['src/index.tsx'],
+  bundle: true,
+  outdir: 'dist',
+  plugins: [
+    TanStackRouterEsbuild()
+  ]
+})
+
+const { host, port } = await ctx.serve({
+  servedir: 'dist'
+})
+
+console.log(`Server running at http://${host}:${port}`)
+```

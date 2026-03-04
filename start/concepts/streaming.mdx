@@ -1,0 +1,718 @@
+---
+title: Streaming
+description: Learn how to use streaming to progressively send data from server to client in TanStack Start.
+---
+
+# Streaming
+
+Streaming allows you to send data from the server to the client progressively, improving perceived performance and user experience. TanStack Start supports multiple streaming strategies for both HTML rendering and server function responses.
+
+## What is Streaming?
+
+Streaming means:
+
+- **Progressive rendering**: Send HTML chunks as they're ready
+- **Non-blocking**: Don't wait for slow operations
+- **Better UX**: Show content immediately, load details later
+- **Efficient**: Use server resources optimally
+- **Type-safe**: Full TypeScript support for streamed data
+
+## Types of Streaming
+
+TanStack Start supports two types of streaming:
+
+1. **HTML Streaming**: Stream rendered HTML from server to browser
+2. **Data Streaming**: Stream data from server functions to client
+
+## HTML Streaming
+
+### Stream Handler
+
+Use `defaultStreamHandler` for HTML streaming:
+
+```tsx
+import { createStartHandler, defaultStreamHandler } from '@tanstack/react-start/server'
+
+export default createStartHandler({
+  handler: defaultStreamHandler,
+})
+```
+
+The stream handler:
+
+1. Begins sending HTML immediately
+2. Streams content as components render
+3. Handles deferred data automatically
+4. Injects hydration data
+
+Reference: `packages/start-server-core/src/createStartHandler.ts:353-359`
+
+### Deferred Data with Streaming
+
+Combine deferred data with streaming for optimal performance:
+
+```tsx
+import { Await, createFileRoute } from '@tanstack/react-router'
+import { Suspense } from 'react'
+import { createServerFn } from '@tanstack/react-start'
+
+const getUser = createServerFn({ method: 'GET' })
+  .handler(async () => {
+    // Fast query
+    return db.users.findById('current')
+  })
+
+const getAnalytics = createServerFn({ method: 'GET' })
+  .handler(async () => {
+    // Slow query - takes 2 seconds
+    await new Promise(r => setTimeout(r, 2000))
+    return db.analytics.compute()
+  })
+
+export const Route = createFileRoute('/dashboard')({
+  loader: async () => {
+    // Await critical data
+    const user = await getUser()
+    
+    // Don't await slow data - defer it!
+    const analytics = getAnalytics()
+    
+    return { user, analytics }
+  },
+  component: Dashboard,
+})
+
+function Dashboard() {
+  const { user, analytics } = Route.useLoaderData()
+  
+  return (
+    <div>
+      {/* Rendered immediately in first stream chunk */}
+      <h1>Welcome, {user.name}</h1>
+      
+      {/* Placeholder rendered in first chunk */}
+      {/* Real content streamed when ready */}
+      <Suspense fallback={<div>Loading analytics...</div>}>
+        <Await promise={analytics}>
+          {(data) => (
+            <div>
+              <h2>Your Analytics</h2>
+              <pre>{JSON.stringify(data, null, 2)}</pre>
+            </div>
+          )}
+        </Await>
+      </Suspense>
+    </div>
+  )
+}
+```
+
+Reference: `examples/react/start-basic/src/routes/deferred.tsx:18-62`
+
+### How HTML Streaming Works
+
+```
+1. Browser requests page
+   ↓
+2. Server starts streaming HTML
+   <!DOCTYPE html>
+   <html>
+   <head>...</head>
+   <body>
+     <div id="root">
+       <h1>Welcome, John</h1>  ← Sent immediately
+       <div>Loading...</div>   ← Suspense fallback
+   ↓
+3. Server continues rendering
+   ↓
+4. Deferred data resolves
+   ↓
+5. Server streams update
+       <template>...</template>  ← Hidden template
+       <script>
+         // Hydration code to replace fallback
+       </script>
+     </div>
+   </body>
+   </html>
+   ↓
+6. Browser applies update
+   Loading... → Real analytics data
+```
+
+## Data Streaming
+
+### ReadableStream
+
+Return a `ReadableStream` from server functions:
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+
+type DataChunk = {
+  index: number
+  data: string
+}
+
+const streamData = createServerFn({ method: 'GET' })
+  .handler(async () => {
+    return new ReadableStream<DataChunk>({
+      async start(controller) {
+        for (let i = 0; i < 10; i++) {
+          // Simulate slow operation
+          await new Promise(r => setTimeout(r, 500))
+          
+          // Send chunk
+          controller.enqueue({
+            index: i,
+            data: `Item ${i}`,
+          })
+        }
+        
+        // Close stream
+        controller.close()
+      },
+    })
+  })
+
+// Usage in component
+function StreamingComponent() {
+  const [items, setItems] = useState<DataChunk[]>([])
+  
+  const loadData = async () => {
+    const stream = await streamData()
+    const reader = stream.getReader()
+    
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      
+      setItems(prev => [...prev, value])
+    }
+  }
+  
+  return (
+    <div>
+      <button onClick={loadData}>Load Stream</button>
+      <ul>
+        {items.map(item => (
+          <li key={item.index}>{item.data}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+```
+
+Reference: `examples/react/start-streaming-data-from-server-functions/src/routes/index.tsx:58-74`
+
+### Async Generators
+
+Use async generators for cleaner streaming code:
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+
+type Message = {
+  id: number
+  text: string
+}
+
+const streamMessages = createServerFn({ method: 'GET' })
+  .handler(async function* () {
+    // Async generator function
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 500))
+      
+      // Yield each message
+      yield {
+        id: i,
+        text: `Message ${i}`,
+      } as Message
+    }
+  })
+
+// Usage with for-await-of
+function StreamingComponent() {
+  const [messages, setMessages] = useState<Message[]>([])
+  
+  const loadMessages = async () => {
+    for await (const msg of await streamMessages()) {
+      setMessages(prev => [...prev, msg])
+    }
+  }
+  
+  return (
+    <div>
+      <button onClick={loadMessages}>Start Stream</button>
+      <ul>
+        {messages.map(msg => (
+          <li key={msg.id}>{msg.text}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+```
+
+Reference: `examples/react/start-streaming-data-from-server-functions/src/routes/index.tsx:80-89`
+
+### Streaming Protocol
+
+TanStack Start uses multiple streaming protocols:
+
+#### NDJSON (Newline Delimited JSON)
+
+For simple JSON chunks:
+
+```
+Content-Type: application/x-ndjson
+
+{"index":0,"data":"Item 0"}\n
+{"index":1,"data":"Item 1"}\n
+{"index":2,"data":"Item 2"}\n
+```
+
+Reference: `packages/start-server-core/src/server-functions-handler.ts:301-308`
+
+#### Framed Protocol
+
+For complex data with raw streams:
+
+```
+Content-Type: application/vnd.tanstack.tss-framed-v1
+
+[type:json][length:42]{"result":["data","here"]}\n
+[type:raw:0][length:1024][binary data...]
+```
+
+This protocol supports:
+- JSON-serializable data
+- Binary streams (files, images)
+- Multiple concurrent streams
+
+Reference: `packages/start-server-core/src/server-functions-handler.ts:241-278`
+
+## Streaming Use Cases
+
+### 1. AI/LLM Responses
+
+Stream AI-generated text as it's produced:
+
+```tsx
+const streamAIResponse = createServerFn({ method: 'POST' })
+  .inputValidator(z.object({ prompt: z.string() }))
+  .handler(async function* ({ data }) {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [{ role: 'user', content: data.prompt }],
+      stream: true,
+    })
+    
+    for await (const chunk of response) {
+      const content = chunk.choices[0]?.delta?.content
+      if (content) {
+        yield { content }
+      }
+    }
+  })
+
+function ChatComponent() {
+  const [response, setResponse] = useState('')
+  
+  const ask = async (prompt: string) => {
+    setResponse('')
+    for await (const chunk of await streamAIResponse({ data: { prompt } })) {
+      setResponse(prev => prev + chunk.content)
+    }
+  }
+  
+  return (
+    <div>
+      <button onClick={() => ask('Tell me a story')}>Ask AI</button>
+      <p>{response}</p>
+    </div>
+  )
+}
+```
+
+### 2. Large Dataset Pagination
+
+Stream large datasets in chunks:
+
+```tsx
+const streamRecords = createServerFn({ method: 'GET' })
+  .handler(async function* () {
+    const batchSize = 100
+    let offset = 0
+    
+    while (true) {
+      const batch = await db.records.findMany({
+        skip: offset,
+        take: batchSize,
+      })
+      
+      if (batch.length === 0) break
+      
+      yield batch
+      offset += batchSize
+      
+      // Small delay to prevent overwhelming the client
+      await new Promise(r => setTimeout(r, 100))
+    }
+  })
+
+function DataTable() {
+  const [records, setRecords] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  
+  const loadAll = async () => {
+    setLoading(true)
+    for await (const batch of await streamRecords()) {
+      setRecords(prev => [...prev, ...batch])
+    }
+    setLoading(false)
+  }
+  
+  return (
+    <div>
+      <button onClick={loadAll} disabled={loading}>
+        {loading ? 'Loading...' : 'Load All'}
+      </button>
+      <table>
+        {records.map(record => (
+          <tr key={record.id}>
+            <td>{record.name}</td>
+          </tr>
+        ))}
+      </table>
+    </div>
+  )
+}
+```
+
+### 3. Real-time Progress Updates
+
+Stream progress during long operations:
+
+```tsx
+type ProgressUpdate = {
+  step: string
+  progress: number
+  complete: boolean
+}
+
+const processData = createServerFn({ method: 'POST' })
+  .inputValidator(z.object({ fileId: z.string() }))
+  .handler(async function* ({ data }) {
+    yield { step: 'Reading file', progress: 0, complete: false }
+    const file = await readFile(data.fileId)
+    
+    yield { step: 'Parsing data', progress: 25, complete: false }
+    const parsed = await parseFile(file)
+    
+    yield { step: 'Processing', progress: 50, complete: false }
+    const processed = await processFile(parsed)
+    
+    yield { step: 'Saving results', progress: 75, complete: false }
+    await saveResults(processed)
+    
+    yield { step: 'Complete', progress: 100, complete: true }
+  })
+
+function FileProcessor({ fileId }: { fileId: string }) {
+  const [status, setStatus] = useState<ProgressUpdate | null>(null)
+  
+  const process = async () => {
+    for await (const update of await processData({ data: { fileId } })) {
+      setStatus(update)
+    }
+  }
+  
+  return (
+    <div>
+      <button onClick={process}>Process File</button>
+      {status && (
+        <div>
+          <p>{status.step}</p>
+          <progress value={status.progress} max={100} />
+        </div>
+      )}
+    </div>
+  )
+}
+```
+
+### 4. Server-Sent Events (SSE) Alternative
+
+Use streams as an alternative to SSE:
+
+```tsx
+const subscribeToUpdates = createServerFn({ method: 'GET' })
+  .handler(async function* () {
+    const listener = (event: any) => {
+      return event
+    }
+    
+    // Subscribe to events
+    eventEmitter.on('update', listener)
+    
+    try {
+      // Keep connection alive and yield events
+      while (true) {
+        const event = await waitForEvent(eventEmitter, 'update')
+        yield event
+      }
+    } finally {
+      eventEmitter.off('update', listener)
+    }
+  })
+```
+
+## Serialization
+
+TanStack Start uses [Seroval](https://github.com/lxsmnsyc/seroval) for streaming serialization:
+
+```tsx
+import { toCrossJSONStream } from 'seroval'
+
+// Automatically handles:
+// - Promises
+// - Dates
+// - RegExp
+// - Maps/Sets
+// - Typed arrays
+// - Custom classes (with plugins)
+// - Circular references
+```
+
+Reference: `packages/start-server-core/src/server-functions-handler.ts:212-224`
+
+## Error Handling in Streams
+
+### Handle Errors in Stream
+
+```tsx
+const riskyStream = createServerFn({ method: 'GET' })
+  .handler(async function* () {
+    try {
+      for (let i = 0; i < 10; i++) {
+        if (i === 5) {
+          throw new Error('Something went wrong')
+        }
+        yield { index: i }
+      }
+    } catch (error) {
+      // Yield error as data
+      yield { error: error.message }
+    }
+  })
+```
+
+### Handle Errors on Client
+
+```tsx
+function StreamingComponent() {
+  const [items, setItems] = useState<any[]>([])
+  const [error, setError] = useState<string | null>(null)
+  
+  const loadData = async () => {
+    try {
+      const stream = await riskyStream()
+      const reader = stream.getReader()
+      
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        
+        if (value.error) {
+          setError(value.error)
+          break
+        }
+        
+        setItems(prev => [...prev, value])
+      }
+    } catch (error) {
+      setError(error.message)
+    }
+  }
+  
+  return (
+    <div>
+      {error && <div className="error">{error}</div>}
+      <button onClick={loadData}>Load</button>
+      <ul>
+        {items.map((item, i) => <li key={i}>{item.index}</li>)}
+      </ul>
+    </div>
+  )
+}
+```
+
+## Performance Considerations
+
+### 1. Chunk Size
+
+```tsx
+// Too small - overhead per chunk
+const badStream = createServerFn({ method: 'GET' })
+  .handler(async function* () {
+    for (let i = 0; i < 1000; i++) {
+      yield { value: i } // 1000 chunks!
+    }
+  })
+
+// Better - reasonable chunk size
+const goodStream = createServerFn({ method: 'GET' })
+  .handler(async function* () {
+    const batchSize = 50
+    for (let i = 0; i < 1000; i += batchSize) {
+      const batch = Array.from({ length: batchSize }, (_, j) => ({
+        value: i + j,
+      }))
+      yield batch // 20 chunks
+    }
+  })
+```
+
+### 2. Backpressure
+
+```tsx
+const streamWithBackpressure = createServerFn({ method: 'GET' })
+  .handler(async () => {
+    return new ReadableStream({
+      async start(controller) {
+        for (let i = 0; i < 100; i++) {
+          // Wait for controller to be ready
+          if (controller.desiredSize! <= 0) {
+            await new Promise(resolve => setTimeout(resolve, 10))
+          }
+          
+          controller.enqueue({ index: i })
+        }
+        controller.close()
+      },
+    })
+  })
+```
+
+### 3. Connection Management
+
+```tsx
+function StreamingComponent() {
+  const abortControllerRef = useRef<AbortController>()
+  
+  const loadData = async () => {
+    // Create abort controller
+    abortControllerRef.current = new AbortController()
+    
+    try {
+      const stream = await streamData({
+        signal: abortControllerRef.current.signal,
+      })
+      
+      // Process stream...
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        console.log('Stream cancelled')
+      }
+    }
+  }
+  
+  const cancel = () => {
+    abortControllerRef.current?.abort()
+  }
+  
+  return (
+    <div>
+      <button onClick={loadData}>Start</button>
+      <button onClick={cancel}>Cancel</button>
+    </div>
+  )
+}
+```
+
+## Best Practices
+
+### 1. Use Appropriate Method
+
+```tsx
+// For simple deferred data
+const loader = async () => {
+  return {
+    critical: await getCritical(),
+    deferred: getDeferred(), // Don't await
+  }
+}
+
+// For complex streaming scenarios
+const streamFn = createServerFn({ method: 'GET' })
+  .handler(async function* () {
+    // Yield multiple chunks
+  })
+```
+
+### 2. Provide Loading States
+
+```tsx
+function StreamingComponent() {
+  const [items, setItems] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  
+  const loadData = async () => {
+    setLoading(true)
+    try {
+      for await (const chunk of await streamData()) {
+        setItems(prev => [...prev, chunk])
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+  
+  return (
+    <div>
+      {loading && <div>Loading more...</div>}
+      {/* content */}
+    </div>
+  )
+}
+```
+
+### 3. Handle Cleanup
+
+```tsx
+function StreamingComponent() {
+  useEffect(() => {
+    const abortController = new AbortController()
+    
+    const loadData = async () => {
+      try {
+        const stream = await streamData({ 
+          signal: abortController.signal 
+        })
+        // Process stream...
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          console.error(error)
+        }
+      }
+    }
+    
+    loadData()
+    
+    return () => {
+      abortController.abort()
+    }
+  }, [])
+  
+  return <div>Content</div>
+}
+```
+
+## Next Steps
+
+- Learn about [Server Functions](./server-functions) for client-server communication
+- Explore [SSR](./ssr) for server-side rendering
+- Review [Deployment](./deployment) for production considerations
+- Understand [Full-Stack Architecture](./full-stack) for the complete picture

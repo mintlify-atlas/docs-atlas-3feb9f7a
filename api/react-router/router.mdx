@@ -1,0 +1,330 @@
+---
+title: React Router API
+---
+
+# React Router
+
+React-specific router implementation with hooks, components, and type-safe navigation.
+
+## createRouter
+
+Create a React router instance with type-safe configuration.
+
+```tsx
+import { createRouter } from '@tanstack/react-router'
+import { routeTree } from './routeTree.gen'
+
+const router = createRouter({
+  routeTree,
+  defaultPreload: 'intent',
+  context: {
+    // Global context available to all routes
+  }
+})
+
+// Register for type safety
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router
+  }
+}
+
+export default router
+```
+
+## RouterProvider
+
+Provides the router instance to your React application.
+
+```tsx
+import { RouterProvider } from '@tanstack/react-router'
+import router from './router'
+
+function App() {
+  return <RouterProvider router={router} />
+}
+```
+
+### Props
+
+<ParamField path="router" type="Router" required>
+  The router instance to provide to the application.
+</ParamField>
+
+<ParamField path="defaultComponent" type="RouteComponent">
+  Default component to render when a route doesn't specify one.
+</ParamField>
+
+<ParamField path="defaultErrorComponent" type="ErrorRouteComponent">
+  Default error component for the entire application.
+</ParamField>
+
+<ParamField path="defaultPendingComponent" type="RouteComponent">
+  Default pending component for the entire application.
+</ParamField>
+
+<ParamField path="context" type="any">
+  Additional context to merge with router context.
+</ParamField>
+
+## Router Class (React)
+
+Extends the core Router with React-specific functionality.
+
+### Additional Properties
+
+<ResponseField name="options" type="RouterOptions">
+  The configuration options used to create the router.
+</ResponseField>
+
+<ResponseField name="__store" type="Store<RouterState>">
+  Internal reactive store for router state (powered by `@tanstack/store`).
+</ResponseField>
+
+### React-Specific Methods
+
+<ResponseField name="dehydrate" type="() => DehydratedRouter">
+  Serialize router state for SSR hydration.
+  
+  ```tsx
+  const dehydratedState = router.dehydrate()
+  ```
+</ResponseField>
+
+<ResponseField name="hydrate" type="(dehydratedState: DehydratedRouter) => void">
+  Restore router state from dehydrated state.
+  
+  ```tsx
+  router.hydrate(dehydratedState)
+  ```
+</ResponseField>
+
+<ResponseField name="mount" type="() => void">
+  Mount the router (called automatically by RouterProvider).
+</ResponseField>
+
+<ResponseField name="update" type="(options: Partial<RouterOptions>) => void">
+  Update router options after creation.
+  
+  ```tsx
+  router.update({
+    context: { user: newUser }
+  })
+  ```
+</ResponseField>
+
+## Example: Complete Setup
+
+```tsx
+// router.tsx
+import { createRouter, createRootRoute } from '@tanstack/react-router'
+
+const rootRoute = createRootRoute({
+  component: () => (
+    <div>
+      <nav>
+        <Link to="/">Home</Link>
+        <Link to="/posts">Posts</Link>
+      </nav>
+      <hr />
+      <Outlet />
+    </div>
+  )
+})
+
+const indexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  component: () => <div>Home Page</div>
+})
+
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts',
+  loader: async () => {
+    const posts = await fetchPosts()
+    return { posts }
+  },
+  component: () => {
+    const { posts } = postsRoute.useLoaderData()
+    return (
+      <div>
+        <h1>Posts</h1>
+        <ul>
+          {posts.map(post => (
+            <li key={post.id}>{post.title}</li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
+})
+
+const routeTree = rootRoute.addChildren([
+  indexRoute,
+  postsRoute
+])
+
+export const router = createRouter({
+  routeTree,
+  defaultPreload: 'intent',
+  defaultPreloadDelay: 100,
+  context: {
+    // Global context
+  }
+})
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router
+  }
+}
+
+// main.tsx
+import { StrictMode } from 'react'
+import ReactDOM from 'react-dom/client'
+import { RouterProvider } from '@tanstack/react-router'
+import { router } from './router'
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <RouterProvider router={router} />
+  </StrictMode>
+)
+```
+
+## SSR Setup
+
+### Server
+
+```tsx
+import { createMemoryHistory } from '@tanstack/react-router'
+import { renderToString } from 'react-dom/server'
+
+export async function render(url: string) {
+  const history = createMemoryHistory({
+    initialEntries: [url]
+  })
+  
+  const router = createRouter({
+    routeTree,
+    history
+  })
+  
+  // Load all matches for the current location
+  await router.load()
+  
+  // Render the app
+  const html = renderToString(
+    <RouterProvider router={router} />
+  )
+  
+  // Get dehydrated state for client hydration
+  const dehydratedState = router.dehydrate()
+  
+  return {
+    html,
+    dehydratedState
+  }
+}
+```
+
+### Client
+
+```tsx
+import { createBrowserHistory } from '@tanstack/react-router'
+import { hydrateRoot } from 'react-dom/client'
+
+const history = createBrowserHistory()
+
+const router = createRouter({
+  routeTree,
+  history
+})
+
+// Hydrate with server state
+const dehydratedState = window.__ROUTER_STATE__
+if (dehydratedState) {
+  router.hydrate(dehydratedState)
+}
+
+hydrateRoot(
+  document.getElementById('root')!,
+  <RouterProvider router={router} />
+)
+```
+
+## Context Management
+
+```tsx
+interface MyRouterContext {
+  user: User | null
+  queryClient: QueryClient
+}
+
+const queryClient = new QueryClient()
+
+const router = createRouter({
+  routeTree,
+  context: {
+    queryClient,
+    user: null
+  } as MyRouterContext
+})
+
+// Update context dynamically
+function App() {
+  const [user, setUser] = useState<User | null>(null)
+  
+  useEffect(() => {
+    router.update({
+      context: {
+        ...router.options.context,
+        user
+      }
+    })
+  }, [user])
+  
+  return <RouterProvider router={router} />
+}
+```
+
+## Type Registration
+
+Register your router for full type safety:
+
+```tsx
+import { createRouter } from '@tanstack/react-router'
+import { routeTree } from './routeTree.gen'
+
+const router = createRouter({ routeTree })
+
+// This enables type safety for:
+// - Route paths
+// - Route params
+// - Search params
+// - Loader data
+// - Route context
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router
+  }
+}
+
+export default router
+```
+
+After registration, you'll get full autocomplete and type checking:
+
+```tsx
+// Autocomplete for 'to' prop
+<Link to="/posts/$postId" params={{ postId: '123' }} />
+
+// Type-safe navigation
+const navigate = useNavigate()
+await navigate({
+  to: '/posts/$postId',
+  params: { postId: '123' }, // TypeScript knows this is required
+  search: { page: 1 } // TypeScript validates this shape
+})
+```

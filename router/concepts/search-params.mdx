@@ -1,0 +1,537 @@
+---
+title: Search Parameters
+---
+
+# Search Parameters
+
+Search parameters (query strings) are a first-class feature in TanStack Router. They're fully type-safe, validated, and integrated into the routing system.
+
+## Why Search Parameters Matter
+
+Search parameters enable powerful UX patterns:
+
+- **Shareable URLs** - Users can bookmark and share filtered/sorted views
+- **Browser history** - Back/forward buttons work with search param changes
+- **Type safety** - Runtime validation and compile-time types
+- **Persistence** - State survives page refreshes
+
+TanStack Router treats search params as first-class route state, not an afterthought.
+
+## Defining Search Parameters
+
+Search parameters are defined using the `validateSearch` option on routes.
+
+### With Zod
+
+```tsx
+import { z } from 'zod'
+import { createFileRoute } from '@tanstack/react-router'
+
+const searchSchema = z.object({
+  page: z.number().int().min(1).default(1),
+  pageSize: z.number().int().min(10).max(100).default(20),
+  filter: z.string().optional(),
+  sortBy: z.enum(['date', 'title', 'author']).default('date'),
+  sortOrder: z.enum(['asc', 'desc']).default('asc'),
+})
+
+export const Route = createFileRoute('/posts')({
+  validateSearch: searchSchema,
+  component: PostsComponent,
+})
+```
+
+The schema provides:
+- **Validation** - Invalid values are rejected
+- **Defaults** - Missing params get default values  
+- **Type inference** - Full TypeScript types
+- **Parsing** - Strings converted to correct types
+
+### With Valibot
+
+```tsx
+import * as v from 'valibot'
+import { createFileRoute } from '@tanstack/react-router'
+
+const searchSchema = v.object({
+  page: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  filter: v.optional(v.string()),
+  tags: v.optional(v.array(v.string())),
+})
+
+export const Route = createFileRoute('/posts')({
+  validateSearch: searchSchema,
+})
+```
+
+### Manual Validation
+
+For custom validation logic:
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/posts')({
+  validateSearch: (search: Record<string, unknown>) => {
+    return {
+      page: Number(search.page ?? 1),
+      filter: (search.filter as string) || '',
+      tags: Array.isArray(search.tags) 
+        ? search.tags.filter(t => typeof t === 'string')
+        : [],
+    }
+  },
+})
+```
+
+Manual validation gives you complete control but loses schema-based type inference.
+
+## Reading Search Parameters
+
+Access search params using the `useSearch` hook.
+
+### Basic Usage
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/posts')({
+  validateSearch: z.object({
+    page: z.number().default(1),
+    filter: z.string().optional(),
+  }),
+  component: PostsComponent,
+})
+
+function PostsComponent() {
+  const { page, filter } = Route.useSearch()
+  // page is number (never undefined due to default)
+  // filter is string | undefined
+  
+  return (
+    <div>
+      <h1>Posts - Page {page}</h1>
+      {filter && <p>Filtered by: {filter}</p>}
+    </div>
+  )
+}
+```
+
+### Typed Search Access
+
+The search params are fully typed based on your schema:
+
+```tsx
+function PostsComponent() {
+  const search = Route.useSearch()
+  
+  // TypeScript knows all fields and their types
+  search.page       // number
+  search.filter     // string | undefined
+  search.sortBy     // 'date' | 'title' | 'author'
+  search.sortOrder  // 'asc' | 'desc'
+}
+```
+
+### With Selectors
+
+Optimize re-renders by selecting specific fields:
+
+```tsx
+import { useSearch } from '@tanstack/react-router'
+
+function FilterDisplay() {
+  // Only re-renders when filter changes
+  const filter = useSearch({
+    from: '/posts',
+    select: (search) => search.filter,
+  })
+  
+  return filter ? <div>Filter: {filter}</div> : null
+}
+```
+
+## Updating Search Parameters
+
+Update search params through navigation.
+
+### With Link Component
+
+```tsx
+import { Link } from '@tanstack/react-router'
+
+function Pagination() {
+  return (
+    <div>
+      <Link
+        to="/posts"
+        search={{ page: 1 }}
+      >
+        First Page
+      </Link>
+      
+      <Link
+        to="/posts"
+        search={{ page: 2 }}
+      >
+        Page 2
+      </Link>
+    </div>
+  )
+}
+```
+
+### Updating Existing Search
+
+Merge with current search params:
+
+```tsx
+import { Link } from '@tanstack/react-router'
+
+function SortOptions() {
+  return (
+    <div>
+      {/* Updates sortBy, preserves other params */}
+      <Link
+        to="."
+        search={(prev) => ({ ...prev, sortBy: 'date' })}
+      >
+        Sort by Date
+      </Link>
+      
+      <Link
+        to="."
+        search={(prev) => ({ ...prev, sortBy: 'title' })}
+      >
+        Sort by Title
+      </Link>
+    </div>
+  )
+}
+```
+
+The `search` function receives previous search params and returns new ones.
+
+### Programmatic Updates
+
+```tsx
+import { useNavigate } from '@tanstack/react-router'
+
+function SearchForm() {
+  const navigate = useNavigate()
+  const search = Route.useSearch()
+  
+  const handleSubmit = (filter: string) => {
+    navigate({
+      to: '.',
+      search: (prev) => ({
+        ...prev,
+        filter,
+        page: 1, // Reset to page 1 when filtering
+      }),
+    })
+  }
+  
+  return (
+    <form onSubmit={(e) => {
+      e.preventDefault()
+      const formData = new FormData(e.currentTarget)
+      handleSubmit(formData.get('filter') as string)
+    }}>
+      <input name="filter" defaultValue={search.filter} />
+      <button type="submit">Filter</button>
+    </form>
+  )
+}
+```
+
+### Clearing Search Params
+
+```tsx
+<Link
+  to="."
+  search={{}}
+>
+  Clear Filters
+</Link>
+
+// Or programmatically
+navigate({ to: '.', search: {} })
+```
+
+Empty object removes all search params (defaults still apply).
+
+## Search Parameter Serialization
+
+By default, TanStack Router uses JSON serialization for search params.
+
+### Default Serialization
+
+The default implementation from `packages/router-core/src/searchParams.ts:4-10`:
+
+```typescript
+export const defaultParseSearch = parseSearchWith(JSON.parse)
+export const defaultStringifySearch = stringifySearchWith(
+  JSON.stringify,
+  JSON.parse,
+)
+```
+
+This handles:
+- **Primitives** - strings, numbers, booleans
+- **Arrays** - `['tag1', 'tag2']` → `?tags=["tag1","tag2"]`
+- **Objects** - Nested object structures
+- **null/undefined** - Properly serialized
+
+### Custom Serialization
+
+Provide custom serialization at the router level:
+
+```tsx
+import { createRouter } from '@tanstack/react-router'
+import { parseSearchWith, stringifySearchWith } from '@tanstack/react-router'
+
+// Using a custom serializer (e.g., superjson)
+import superjson from 'superjson'
+
+const router = createRouter({
+  routeTree,
+  parseSearch: parseSearchWith(superjson.parse),
+  stringifySearch: stringifySearchWith(superjson.stringify),
+})
+```
+
+This enables serialization of Dates, Maps, Sets, and more.
+
+### Query String Format
+
+TanStack Router uses the `qss` library for encoding:
+
+```
+?page=2&filter=react&tags=["typescript","router"]
+```
+
+Complex objects are JSON-stringified within the query string.
+
+## Search Param Inheritance
+
+Child routes inherit search params from parents.
+
+### Parent Search Schema
+
+```tsx
+// Parent route
+export const Route = createFileRoute('/posts')({
+  validateSearch: z.object({
+    filter: z.string().optional(),
+  }),
+})
+
+// Child route
+export const ChildRoute = createFileRoute('/posts/$postId')({
+  validateSearch: z.object({
+    commentId: z.number().optional(),
+  }),
+})
+```
+
+At `/posts/123?filter=react&commentId=5`, both params are available:
+- Parent route sees `{ filter: 'react' }`
+- Child route sees `{ filter: 'react', commentId: 5 }`
+
+The child schema is merged with the parent schema.
+
+### Overriding Parent Search
+
+Child schemas can redefine parent search params:
+
+```tsx
+export const ChildRoute = createFileRoute('/posts/special')({
+  validateSearch: z.object({
+    // Overrides parent's filter schema
+    filter: z.enum(['featured', 'popular']).default('featured'),
+  }),
+})
+```
+
+## Search Middleware
+
+Transform search parameters before they reach components.
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/posts')({
+  validateSearch: z.object({
+    page: z.number().default(1),
+    offset: z.number().optional(),
+  }),
+  search: {
+    middlewares: [
+      // Calculate offset from page
+      ({ search, next }) => {
+        const pageSize = 20
+        const offset = (search.page - 1) * pageSize
+        return next({ ...search, offset })
+      },
+    ],
+  },
+})
+```
+
+Middleware runs after validation and before components receive search params.
+
+## Search Param Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always validate search params">
+    Never trust search params from the URL. Always validate with a schema to ensure type safety and handle malformed URLs gracefully.
+  </Accordion>
+
+  <Accordion title="Provide sensible defaults">
+    Use `.default()` in your schema for optional params. This makes URLs cleaner and components simpler.
+  </Accordion>
+
+  <Accordion title="Use enums for controlled values">
+    When search params have a fixed set of valid values, use `z.enum()` to enforce them and get better type inference.
+  </Accordion>
+
+  <Accordion title="Reset pagination when filtering">
+    When updating filter/search params, reset `page` to 1 to avoid showing empty results.
+  </Accordion>
+
+  <Accordion title="Keep URLs readable">
+    Avoid deeply nested objects in search params. Flat structures create more shareable URLs.
+  </Accordion>
+</AccordionGroup>
+
+## Common Patterns
+
+### Pagination
+
+```tsx
+const searchSchema = z.object({
+  page: z.number().int().min(1).default(1),
+  pageSize: z.number().int().min(10).max(100).default(20),
+})
+
+function Pagination() {
+  const { page, pageSize } = Route.useSearch()
+  const navigate = useNavigate()
+  
+  const nextPage = () => {
+    navigate({
+      to: '.',
+      search: (prev) => ({ ...prev, page: prev.page + 1 }),
+    })
+  }
+  
+  return (
+    <div>
+      <span>Page {page}</span>
+      <button onClick={nextPage}>Next</button>
+    </div>
+  )
+}
+```
+
+### Filtering
+
+```tsx
+const searchSchema = z.object({
+  status: z.enum(['all', 'active', 'completed']).default('all'),
+  assignee: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+})
+
+function Filters() {
+  const search = Route.useSearch()
+  
+  return (
+    <div>
+      <Link to="." search={{ ...search, status: 'active' }}>
+        Active
+      </Link>
+      <Link to="." search={{ ...search, status: 'completed' }}>
+        Completed
+      </Link>
+    </div>
+  )
+}
+```
+
+### Sorting
+
+```tsx
+const searchSchema = z.object({
+  sortBy: z.enum(['date', 'title', 'author']).default('date'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+})
+
+function SortableHeader({ field, label }: { field: string; label: string }) {
+  const { sortBy, sortOrder } = Route.useSearch()
+  const isActive = sortBy === field
+  
+  return (
+    <Link
+      to="."
+      search={(prev) => ({
+        ...prev,
+        sortBy: field,
+        sortOrder: isActive && sortOrder === 'asc' ? 'desc' : 'asc',
+      })}
+    >
+      {label} {isActive && (sortOrder === 'asc' ? '↑' : '↓')}
+    </Link>
+  )
+}
+```
+
+### Search with Debounce
+
+```tsx
+import { useEffect, useState } from 'react'
+import { useNavigate } from '@tanstack/react-router'
+
+function SearchInput() {
+  const { query } = Route.useSearch()
+  const navigate = useNavigate()
+  const [value, setValue] = useState(query || '')
+  
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      navigate({
+        to: '.',
+        search: (prev) => ({ ...prev, query: value, page: 1 }),
+      })
+    }, 300)
+    
+    return () => clearTimeout(timer)
+  }, [value])
+  
+  return (
+    <input
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      placeholder="Search..."
+    />
+  )
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Loaders" icon="database" href="./loaders">
+    Learn how to use search params in data loading
+  </Card>
+  <Card title="Type Safety" icon="shield" href="./type-safety">
+    Explore search parameter type inference
+  </Card>
+  <Card title="Navigation" icon="compass" href="./navigation">
+    Master search param navigation patterns
+  </Card>
+  <Card title="Caching" icon="server" href="./caching">
+    Understand how search params affect caching
+  </Card>
+</CardGroup>

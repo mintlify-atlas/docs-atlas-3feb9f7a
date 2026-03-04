@@ -1,0 +1,535 @@
+---
+title: Static Generation
+---
+
+# Static Generation
+
+TanStack Start supports static site generation (SSG) and static server function caching, allowing you to pre-render pages and cache server function results at build time for optimal performance.
+
+## Overview
+
+Static generation provides:
+
+- **Faster page loads** - Pre-rendered HTML served instantly
+- **Better SEO** - Search engines can easily crawl static HTML
+- **Reduced server load** - No server rendering for static pages
+- **Edge caching** - Deploy to CDNs for global distribution
+- **Cost efficiency** - Lower hosting costs with static files
+
+## Full Static Generation
+
+Generate a completely static site:
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite'
+import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+
+export default defineConfig({
+  plugins: [
+    tanstackStart({
+      static: true,
+    }),
+  ],
+})
+```
+
+Build the static site:
+
+```bash
+npm run build
+```
+
+The output in `.output/public` can be deployed to any static host.
+
+## Static Server Functions
+
+Cache server function results at build time:
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+import { staticFunctionMiddleware } from '@tanstack/start-static-server-functions'
+
+export const getStaticData = createServerFn({ method: 'GET' })
+  .middleware([staticFunctionMiddleware])
+  .handler(async () => {
+    // This runs at build time in production
+    const data = await db.settings.findAll()
+    return data
+  })
+```
+
+### How It Works
+
+1. **Build Time** - Server function executes and results are cached to JSON files
+2. **Runtime** - Client fetches pre-generated JSON instead of calling server
+3. **Development** - Functions execute normally for live development
+
+### Input-Based Caching
+
+Cache results based on input parameters:
+
+```tsx
+export const getPost = createServerFn({ method: 'POST' })
+  .middleware([staticFunctionMiddleware])
+  .inputValidator((postId: string) => postId)
+  .handler(async ({ data }) => {
+    // Cached separately for each postId
+    return await db.posts.findById(data)
+  })
+```
+
+At build time, call the function with different inputs:
+
+```tsx
+// In a route loader or pre-render script
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    // This executes at build time for each post
+    const post = await getPost({ data: params.postId })
+    return { post }
+  },
+})
+```
+
+## Prerendering Routes
+
+Pre-render specific routes at build time:
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite'
+import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+
+export default defineConfig({
+  plugins: [
+    tanstackStart({
+      prerender: {
+        routes: [
+          '/',
+          '/about',
+          '/contact',
+          '/posts',
+          '/posts/1',
+          '/posts/2',
+          '/posts/3',
+        ],
+      },
+    }),
+  ],
+})
+```
+
+### Dynamic Route Prerendering
+
+Generate routes dynamically:
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  plugins: [
+    tanstackStart({
+      prerender: {
+        async getRoutes() {
+          // Fetch all post IDs from database
+          const posts = await db.posts.findAll()
+          
+          return [
+            '/',
+            '/about',
+            ...posts.map((post) => `/posts/${post.id}`),
+          ]
+        },
+      },
+    }),
+  ],
+})
+```
+
+## Incremental Static Regeneration (ISR)
+
+Regenerate static pages on-demand:
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+
+export const getPost = createServerFn({ method: 'GET' })
+  .inputValidator((postId: string) => postId)
+  .handler(async ({ data }) => {
+    const post = await db.posts.findById(data)
+    return post
+  })
+
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    return await getPost({ data: params.postId })
+  },
+  // Revalidate every 60 seconds
+  staleTime: 60 * 1000,
+})
+```
+
+## Hybrid Rendering
+
+Combine static and dynamic content:
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+import { staticFunctionMiddleware } from '@tanstack/start-static-server-functions'
+
+// Static data - cached at build time
+const getStaticContent = createServerFn({ method: 'GET' })
+  .middleware([staticFunctionMiddleware])
+  .handler(async () => {
+    return await cms.getPageContent('home')
+  })
+
+// Dynamic data - fetched at runtime
+const getDynamicData = createServerFn({ method: 'GET' }).handler(async () => {
+  return await analytics.getCurrentStats()
+})
+
+export const Route = createFileRoute('/')({
+  loader: async () => {
+    // Parallel loading of static and dynamic data
+    const [content, stats] = await Promise.all([
+      getStaticContent(),
+      getDynamicData(),
+    ])
+    
+    return { content, stats }
+  },
+})
+
+function HomePage() {
+  const { content, stats } = Route.useLoaderData()
+  
+  return (
+    <div>
+      {/* Static content from build time */}
+      <div dangerouslySetInnerHTML={{ __html: content }} />
+      
+      {/* Dynamic data from runtime */}
+      <div>Current visitors: {stats.visitors}</div>
+    </div>
+  )
+}
+```
+
+## Build-Time Data Fetching
+
+Fetch data during the build process:
+
+```tsx
+// scripts/prebuild.ts
+import { db } from './db'
+import { writeFile } from 'fs/promises'
+
+async function prebuild() {
+  // Fetch all posts
+  const posts = await db.posts.findAll()
+  
+  // Generate static data file
+  await writeFile(
+    'src/data/posts.json',
+    JSON.stringify(posts, null, 2)
+  )
+  
+  console.log(`Generated data for ${posts.length} posts`)
+}
+
+prebuild().catch(console.error)
+```
+
+Add to package.json:
+
+```json
+{
+  "scripts": {
+    "prebuild": "tsx scripts/prebuild.ts",
+    "build": "npm run prebuild && vite build"
+  }
+}
+```
+
+Use the generated data:
+
+```tsx
+import posts from '~/data/posts.json'
+
+export const Route = createFileRoute('/posts')({
+  loader: () => ({ posts }),
+})
+```
+
+## Caching Strategies
+
+### Cache Everything
+
+Cache all server functions:
+
+```tsx
+// utils/cache.ts
+import { staticFunctionMiddleware } from '@tanstack/start-static-server-functions'
+
+export const cached = (fn: any) => {
+  return fn.middleware([staticFunctionMiddleware])
+}
+
+// Usage
+export const getData = cached(
+  createServerFn({ method: 'GET' }).handler(async () => {
+    return await fetchData()
+  })
+)
+```
+
+### Selective Caching
+
+Cache only specific functions:
+
+```tsx
+// Cached - rarely changes
+export const getSettings = createServerFn({ method: 'GET' })
+  .middleware([staticFunctionMiddleware])
+  .handler(async () => {
+    return await db.settings.findAll()
+  })
+
+// Not cached - frequently changes
+export const getCurrentUser = createServerFn({ method: 'GET' }).handler(
+  async () => {
+    return await auth.getCurrentUser()
+  },
+)
+```
+
+### Time-Based Caching
+
+Implement custom time-based caching:
+
+```tsx
+const cacheMiddleware = createMiddleware({ type: 'function' })
+  .server(async ({ next, data, serverFnMeta }) => {
+    const cacheKey = `${serverFnMeta.id}:${JSON.stringify(data)}`
+    const cached = await cache.get(cacheKey)
+    
+    if (cached && cached.timestamp > Date.now() - 3600000) {
+      // Cache hit and not expired (1 hour)
+      return next({ result: cached.data })
+    }
+    
+    // Cache miss or expired
+    const result = await next()
+    
+    await cache.set(cacheKey, {
+      data: result.result,
+      timestamp: Date.now(),
+    })
+    
+    return result
+  })
+```
+
+## Static API Routes
+
+Generate static API responses:
+
+```tsx
+export const Route = createFileRoute('/api/config')({
+  server: {
+    handlers: {
+      GET: async () => {
+        // This response can be cached at build time
+        const config = {
+          apiUrl: process.env.VITE_API_URL,
+          features: ['feature1', 'feature2'],
+        }
+        
+        return Response.json(config, {
+          headers: {
+            'Cache-Control': 'public, max-age=31536000, immutable',
+          },
+        })
+      },
+    },
+  },
+})
+```
+
+## Sitemap Generation
+
+Generate sitemap during build:
+
+```ts
+// scripts/generate-sitemap.ts
+import { writeFile } from 'fs/promises'
+import { db } from './db'
+
+async function generateSitemap() {
+  const posts = await db.posts.findAll()
+  
+  const urls = [
+    { loc: '/', priority: 1.0 },
+    { loc: '/about', priority: 0.8 },
+    ...posts.map((post) => ({
+      loc: `/posts/${post.id}`,
+      lastmod: post.updatedAt,
+      priority: 0.6,
+    })),
+  ]
+  
+  const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls
+  .map(
+    (url) => `  <url>
+    <loc>https://example.com${url.loc}</loc>
+    ${url.lastmod ? `<lastmod>${url.lastmod}</lastmod>` : ''}
+    <priority>${url.priority}</priority>
+  </url>`
+  )
+  .join('\n')}
+</urlset>`
+  
+  await writeFile('public/sitemap.xml', sitemap)
+  console.log(`Generated sitemap with ${urls.length} URLs`)
+}
+
+generateSitemap().catch(console.error)
+```
+
+## RSS Feed Generation
+
+```ts
+// scripts/generate-rss.ts
+import { writeFile } from 'fs/promises'
+import { db } from './db'
+
+async function generateRSS() {
+  const posts = await db.posts.findAll({ limit: 20 })
+  
+  const rss = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>My Blog</title>
+    <link>https://example.com</link>
+    <description>Blog posts</description>
+${posts
+  .map(
+    (post) => `    <item>
+      <title>${escapeXml(post.title)}</title>
+      <link>https://example.com/posts/${post.id}</link>
+      <description>${escapeXml(post.excerpt)}</description>
+      <pubDate>${new Date(post.publishedAt).toUTCString()}</pubDate>
+    </item>`
+  )
+  .join('\n')}
+  </channel>
+</rss>`
+  
+  await writeFile('public/rss.xml', rss)
+}
+
+function escapeXml(str: string) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+}
+
+generateRSS().catch(console.error)
+```
+
+## Deploy Static Sites
+
+### Cloudflare Pages
+
+```bash
+# Build
+npm run build
+
+# Deploy
+npx wrangler pages deploy .output/public
+```
+
+### Netlify
+
+```toml
+# netlify.toml
+[build]
+  command = "npm run build"
+  publish = ".output/public"
+```
+
+### Vercel
+
+```json
+// vercel.json
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": ".output/public"
+}
+```
+
+## Best Practices
+
+1. **Choose the Right Strategy**
+   - Full static for content sites
+   - Hybrid for dynamic sections
+   - ISR for frequently updated content
+
+2. **Cache Wisely**
+   - Cache stable data aggressively
+   - Don't cache user-specific data
+   - Set appropriate cache durations
+
+3. **Optimize Build Times**
+   - Limit prerendered routes
+   - Use incremental builds
+   - Cache build artifacts
+
+4. **Handle Errors**
+   - Provide fallbacks for missing pages
+   - Generate error pages
+   - Monitor failed builds
+
+5. **SEO Optimization**
+   - Generate sitemaps
+   - Create RSS feeds
+   - Include meta tags in static HTML
+
+6. **Performance**
+   - Minimize bundle sizes
+   - Optimize images
+   - Use CDN for assets
+
+7. **Testing**
+   - Test static builds locally
+   - Verify all routes work
+   - Check cache behavior
+
+## Limitations
+
+1. **No Runtime Server**
+   - Cannot use server-only features
+   - No access to request context
+   - Limited to build-time data
+
+2. **Build Time**
+   - Large sites take longer to build
+   - Need to rebuild for updates
+   - Resource-intensive for many routes
+
+3. **Dynamic Data**
+   - Cannot fetch user-specific data
+   - Authentication requires client-side
+   - Real-time features need client polling
+
+## Next Steps
+
+- Explore [Deployment](./deployment) options
+- Learn about [Data Fetching](./data-fetching) strategies
+- Review [Server Functions](./server-functions) documentation

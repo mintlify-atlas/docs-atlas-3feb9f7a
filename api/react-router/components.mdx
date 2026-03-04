@@ -1,0 +1,588 @@
+---
+title: React Components API
+---
+
+# React Components
+
+React components for rendering routes, handling errors, and managing navigation.
+
+## RouterProvider
+
+The root component that provides router context to your application.
+
+```tsx
+import { RouterProvider } from '@tanstack/react-router'
+import { router } from './router'
+
+function App() {
+  return <RouterProvider router={router} />
+}
+```
+
+### Props
+
+<ParamField path="router" type="Router" required>
+  The router instance.
+</ParamField>
+
+<ParamField path="defaultComponent" type="RouteComponent">
+  Fallback component when a route has no component.
+</ParamField>
+
+<ParamField path="defaultErrorComponent" type="ErrorRouteComponent">
+  Default error component for all routes.
+</ParamField>
+
+<ParamField path="defaultPendingComponent" type="RouteComponent">
+  Default loading component for all routes.
+</ParamField>
+
+<ParamField path="context" type="any">
+  Additional context to merge with router context.
+</ParamField>
+
+## Outlet
+
+Render child route components.
+
+```tsx
+import { Outlet } from '@tanstack/react-router'
+
+function Layout() {
+  return (
+    <div>
+      <Header />
+      <main>
+        <Outlet />
+      </main>
+      <Footer />
+    </div>
+  )
+}
+```
+
+## Match
+
+Render a specific route match.
+
+```tsx
+import { Match } from '@tanstack/react-router'
+
+function CustomLayout() {
+  return (
+    <div>
+      <Sidebar />
+      <Match from="/posts" component={PostsLayout} />
+    </div>
+  )
+}
+```
+
+### Props
+
+<ParamField path="from" type="string" required>
+  Route ID to match.
+</ParamField>
+
+<ParamField path="component" type="RouteComponent">
+  Component to render.
+</ParamField>
+
+<ParamField path="errorComponent" type="ErrorRouteComponent">
+  Error component.
+</ParamField>
+
+<ParamField path="pendingComponent" type="RouteComponent">
+  Loading component.
+</ParamField>
+
+## MatchRoute
+
+Conditionally render based on route matching.
+
+```tsx
+import { MatchRoute } from '@tanstack/react-router'
+
+function Navigation() {
+  return (
+    <nav>
+      <Link to="/">Home</Link>
+      
+      <MatchRoute to="/admin">
+        {(match) => match && <AdminMenu />}
+      </MatchRoute>
+    </nav>
+  )
+}
+```
+
+### Props
+
+<ParamField path="to" type="string" required>
+  Path to match.
+</ParamField>
+
+<ParamField path="params" type="boolean | Record<string, any>">
+  Match with specific params.
+</ParamField>
+
+<ParamField path="pending" type="boolean">
+  Match pending routes.
+</ParamField>
+
+<ParamField path="caseSensitive" type="boolean">
+  Case-sensitive matching.
+</ParamField>
+
+<ParamField path="children" type="(match: RouteMatch | false) => ReactNode" required>
+  Render function.
+</ParamField>
+
+## Matches
+
+Render all current route matches.
+
+```tsx
+import { Matches } from '@tanstack/react-router'
+
+function App() {
+  return (
+    <div>
+      <Header />
+      <Matches />
+    </div>
+  )
+}
+```
+
+## Navigate
+
+Declarative navigation component.
+
+```tsx
+import { Navigate } from '@tanstack/react-router'
+
+function ProtectedRoute({ children }) {
+  const { user } = useAuth()
+  
+  if (!user) {
+    return <Navigate to="/login" replace />
+  }
+  
+  return children
+}
+```
+
+### Props
+
+<ParamField path="to" type="string" required>
+  Destination path.
+</ParamField>
+
+<ParamField path="params" type="Record<string, any>">
+  Path parameters.
+</ParamField>
+
+<ParamField path="search" type="Record<string, any>">
+  Search parameters.
+</ParamField>
+
+<ParamField path="hash" type="string">
+  URL hash.
+</ParamField>
+
+<ParamField path="replace" type="boolean">
+  Replace history entry.
+</ParamField>
+
+<ParamField path="resetScroll" type="boolean">
+  Reset scroll position.
+</ParamField>
+
+## Link
+
+Navigation link component.
+
+```tsx
+import { Link } from '@tanstack/react-router'
+
+<Link to="/posts">View Posts</Link>
+<Link to="/posts/$postId" params={{ postId: '123' }}>Post 123</Link>
+```
+
+See [Link API](./link) for full documentation.
+
+## CatchBoundary
+
+Error boundary for routes.
+
+```tsx
+import { CatchBoundary } from '@tanstack/react-router'
+
+function ErrorBoundary() {
+  return (
+    <CatchBoundary
+      getResetKey={() => 'reset'}
+      onCatch={(error) => console.error(error)}
+      errorComponent={({ error, reset }) => (
+        <div>
+          <h1>Something went wrong</h1>
+          <pre>{error.message}</pre>
+          <button onClick={reset}>Try Again</button>
+        </div>
+      )}
+    >
+      <MyComponent />
+    </CatchBoundary>
+  )
+}
+```
+
+### Props
+
+<ParamField path="children" type="ReactNode" required>
+  Children to wrap.
+</ParamField>
+
+<ParamField path="errorComponent" type="ErrorRouteComponent">
+  Component to render on error.
+</ParamField>
+
+<ParamField path="getResetKey" type="() => string">
+  Function to generate reset key.
+</ParamField>
+
+<ParamField path="onCatch" type="(error: Error, errorInfo: ErrorInfo) => void">
+  Error handler callback.
+</ParamField>
+
+## ErrorComponent
+
+Default error component.
+
+```tsx
+import { ErrorComponent } from '@tanstack/react-router'
+
+function MyErrorComponent({ error, reset }) {
+  return (
+    <div>
+      <ErrorComponent error={error} />
+      <button onClick={reset}>Reset</button>
+    </div>
+  )
+}
+```
+
+### Props
+
+<ParamField path="error" type="Error" required>
+  The error object.
+</ParamField>
+
+## ScrollRestoration
+
+Restore scroll position on navigation.
+
+```tsx
+import { ScrollRestoration } from '@tanstack/react-router'
+
+function RootLayout() {
+  return (
+    <div>
+      <ScrollRestoration />
+      <Outlet />
+    </div>
+  )
+}
+```
+
+### Props
+
+<ParamField path="getKey" type="(location) => string">
+  Function to generate scroll restoration key.
+  
+  ```tsx
+  <ScrollRestoration 
+    getKey={(location) => location.pathname}
+  />
+  ```
+</ParamField>
+
+## Block
+
+Block navigation with confirmation (declarative version of useBlocker).
+
+```tsx
+import { Block } from '@tanstack/react-router'
+
+function EditForm() {
+  const [isDirty, setIsDirty] = useState(false)
+  
+  return (
+    <div>
+      {isDirty && (
+        <Block
+          blockerFn={async () => {
+            return window.confirm('Discard changes?')
+          }}
+          enableBeforeUnload
+        />
+      )}
+      
+      <form onChange={() => setIsDirty(true)}>...</form>
+    </div>
+  )
+}
+```
+
+### Props
+
+<ParamField path="blockerFn" type="BlockerFn" required>
+  Function to determine if navigation should be blocked.
+</ParamField>
+
+<ParamField path="enableBeforeUnload" type="boolean">
+  Enable browser beforeunload warning.
+</ParamField>
+
+## Await
+
+Await deferred data in Suspense boundaries.
+
+```tsx
+import { Await, defer } from '@tanstack/react-router'
+import { Suspense } from 'react'
+
+const route = createRoute({
+  loader: async () => {
+    const critical = await fetchCriticalData()
+    const deferred = defer(fetchDeferredData())
+    
+    return { critical, deferred }
+  },
+  component: () => {
+    const { critical, deferred } = route.useLoaderData()
+    
+    return (
+      <div>
+        <h1>{critical.title}</h1>
+        
+        <Suspense fallback={<div>Loading...</div>}>
+          <Await promise={deferred}>
+            {(data) => <Details data={data} />}
+          </Await>
+        </Suspense>
+      </div>
+    )
+  }
+})
+```
+
+### Props
+
+<ParamField path="promise" type="Promise<T>" required>
+  The deferred promise to await.
+</ParamField>
+
+<ParamField path="children" type="(data: T) => ReactNode" required>
+  Render function receiving resolved data.
+</ParamField>
+
+## ClientOnly
+
+Render children only on the client.
+
+```tsx
+import { ClientOnly } from '@tanstack/react-router'
+
+function MyComponent() {
+  return (
+    <div>
+      <h1>Server and Client</h1>
+      
+      <ClientOnly fallback={<div>Loading...</div>}>
+        {() => <BrowserOnlyComponent />}
+      </ClientOnly>
+    </div>
+  )
+}
+```
+
+### Props
+
+<ParamField path="children" type="() => ReactNode" required>
+  Function returning client-only content.
+</ParamField>
+
+<ParamField path="fallback" type="ReactNode">
+  Content to render on the server.
+</ParamField>
+
+## NotFoundRoute
+
+Handle 404 pages.
+
+```tsx
+import { NotFoundRoute } from '@tanstack/react-router'
+
+const notFoundRoute = new NotFoundRoute({
+  getParentRoute: () => rootRoute,
+  component: () => (
+    <div>
+      <h1>404 - Page Not Found</h1>
+      <Link to="/">Go Home</Link>
+    </div>
+  )
+})
+```
+
+## CatchNotFound
+
+Catch not found errors.
+
+```tsx
+import { CatchNotFound, DefaultGlobalNotFound } from '@tanstack/react-router'
+
+function App() {
+  return (
+    <CatchNotFound fallback={<DefaultGlobalNotFound />}>
+      <RouterProvider router={router} />
+    </CatchNotFound>
+  )
+}
+```
+
+## Scripts
+
+Render route scripts (for SSR).
+
+```tsx
+import { Scripts } from '@tanstack/react-router'
+
+function RootDocument() {
+  return (
+    <html>
+      <head>...</head>
+      <body>
+        <Outlet />
+        <Scripts />
+      </body>
+    </html>
+  )
+}
+```
+
+## Examples
+
+### Complete Layout
+
+```tsx
+import { 
+  Outlet, 
+  ScrollRestoration,
+  Scripts 
+} from '@tanstack/react-router'
+
+function RootLayout() {
+  return (
+    <html>
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </head>
+      <body>
+        <div className="app">
+          <Header />
+          <main>
+            <Outlet />
+          </main>
+          <Footer />
+        </div>
+        <ScrollRestoration />
+        <Scripts />
+      </body>
+    </html>
+  )
+}
+```
+
+### Conditional Rendering
+
+```tsx
+import { MatchRoute } from '@tanstack/react-router'
+
+function Sidebar() {
+  return (
+    <aside>
+      <MatchRoute to="/admin" fuzzy>
+        {(match) => match && <AdminMenu />}
+      </MatchRoute>
+      
+      <MatchRoute to="/dashboard" fuzzy>
+        {(match) => match && <DashboardMenu />}
+      </MatchRoute>
+    </aside>
+  )
+}
+```
+
+### Error Handling
+
+```tsx
+import { CatchBoundary, ErrorComponent } from '@tanstack/react-router'
+
+const rootRoute = createRootRoute({
+  errorComponent: ({ error, reset }) => (
+    <div className="error-page">
+      <h1>Application Error</h1>
+      <ErrorComponent error={error} />
+      <button onClick={reset}>Reset Application</button>
+      <Link to="/">Go Home</Link>
+    </div>
+  ),
+  component: RootLayout
+})
+```
+
+### Deferred Data Loading
+
+```tsx
+import { Await, defer } from '@tanstack/react-router'
+import { Suspense } from 'react'
+
+const dashboardRoute = createRoute({
+  loader: async () => {
+    // Critical data (blocks navigation)
+    const user = await fetchUser()
+    
+    // Deferred data (doesn't block)
+    const stats = defer(fetchStats())
+    const activity = defer(fetchActivity())
+    
+    return { user, stats, activity }
+  },
+  component: () => {
+    const { user, stats, activity } = dashboardRoute.useLoaderData()
+    
+    return (
+      <div>
+        <h1>Welcome {user.name}</h1>
+        
+        <div className="grid">
+          <Suspense fallback={<StatsLoader />}>
+            <Await promise={stats}>
+              {(data) => <StatsCard data={data} />}
+            </Await>
+          </Suspense>
+          
+          <Suspense fallback={<ActivityLoader />}>
+            <Await promise={activity}>
+              {(data) => <ActivityFeed data={data} />}
+            </Await>
+          </Suspense>
+        </div>
+      </div>
+    )
+  }
+})
+```

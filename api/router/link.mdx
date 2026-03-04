@@ -1,0 +1,460 @@
+---
+title: Link API
+---
+
+# Link
+
+Type-safe navigation components and utilities for creating links in TanStack Router.
+
+## LinkOptions
+
+Configuration options for link navigation.
+
+<ParamField path="to" type="string" required>
+  The destination path. Can be absolute or relative.
+  
+  ```tsx
+  to="/posts"              // Absolute
+  to="./details"           // Relative to current route
+  to="../"                 // Parent route
+  ```
+</ParamField>
+
+<ParamField path="from" type="string">
+  The source path for type inference. Enables better autocomplete.
+  
+  ```tsx
+  from="/posts"
+  to="./$postId"
+  ```
+</ParamField>
+
+<ParamField path="params" type="Record<string, any>">
+  Path parameters for the destination route.
+  
+  ```tsx
+  to="/posts/$postId"
+  params={{ postId: '123' }}
+  ```
+</ParamField>
+
+<ParamField path="search" type="Record<string, any> | (prev) => Record<string, any>">
+  Search parameters for the destination route. Can be an object or updater function.
+  
+  ```tsx
+  search={{ page: 1, filter: 'recent' }}
+  search={(prev) => ({ ...prev, page: prev.page + 1 })}
+  ```
+</ParamField>
+
+<ParamField path="hash" type="string | (prev) => string">
+  URL hash for the destination.
+  
+  ```tsx
+  hash="#comments"
+  hash={(prev) => prev === '#top' ? '#bottom' : '#top'}
+  ```
+</ParamField>
+
+<ParamField path="state" type="any | (prev) => any">
+  History state for the navigation.
+  
+  ```tsx
+  state={{ from: 'homepage' }}
+  ```
+</ParamField>
+
+<ParamField path="replace" type="boolean">
+  Replace current history entry instead of pushing a new one.
+  
+  **Default:** `false`
+</ParamField>
+
+<ParamField path="resetScroll" type="boolean">
+  Reset scroll position when navigating.
+  
+  **Default:** `true`
+</ParamField>
+
+<ParamField path="startTransition" type="boolean">
+  Wrap navigation in React.startTransition.
+  
+  **Default:** `false`
+</ParamField>
+
+<ParamField path="viewTransition" type="boolean | ViewTransitionOptions">
+  Use View Transition API for navigation animation.
+  
+  ```tsx
+  viewTransition={true}
+  viewTransition={{ name: 'slide' }}
+  ```
+</ParamField>
+
+<ParamField path="preload" type="false | 'intent' | 'viewport' | 'render'">
+  When to preload the destination route:
+  - `false` - Don't preload
+  - `'intent'` - Preload on hover/focus
+  - `'viewport'` - Preload when in viewport
+  - `'render'` - Preload immediately
+</ParamField>
+
+<ParamField path="preloadDelay" type="number">
+  Delay in milliseconds before preloading.
+  
+  **Default:** `50`
+</ParamField>
+
+<ParamField path="disabled" type="boolean">
+  Disable the link navigation.
+  
+  **Default:** `false`
+</ParamField>
+
+<ParamField path="target" type="string">
+  Standard anchor target attribute (`_blank`, `_self`, etc.).
+</ParamField>
+
+<ParamField path="activeOptions" type="ActiveOptions">
+  Options for determining when the link is active.
+  
+  ```tsx
+  activeOptions={{
+    exact: true,
+    includeSearch: true,
+    includeHash: false
+  }}
+  ```
+</ParamField>
+
+<ParamField path="activeProps" type="React.AnchorHTMLAttributes">
+  Props to apply when the link is active.
+  
+  ```tsx
+  activeProps={{
+    className: 'font-bold text-blue-600',
+    'aria-current': 'page'
+  }}
+  ```
+</ParamField>
+
+<ParamField path="inactiveProps" type="React.AnchorHTMLAttributes">
+  Props to apply when the link is inactive.
+  
+  ```tsx
+  inactiveProps={{
+    className: 'text-gray-600'
+  }}
+  ```
+</ParamField>
+
+## ActiveOptions
+
+Options for determining link active state.
+
+<ParamField path="exact" type="boolean">
+  Match the path exactly.
+  
+  **Default:** `false`
+</ParamField>
+
+<ParamField path="includeHash" type="boolean">
+  Include hash in active matching.
+  
+  **Default:** `false`
+</ParamField>
+
+<ParamField path="includeSearch" type="boolean">
+  Include search params in active matching.
+  
+  **Default:** `false`
+</ParamField>
+
+## Link Component
+
+The primary navigation component.
+
+```tsx
+import { Link } from '@tanstack/react-router'
+
+function Navigation() {
+  return (
+    <nav>
+      <Link to="/">Home</Link>
+      <Link 
+        to="/posts" 
+        activeProps={{ className: 'active' }}
+      >
+        Posts
+      </Link>
+      <Link 
+        to="/posts/$postId" 
+        params={{ postId: '123' }}
+        search={{ tab: 'comments' }}
+      >
+        Post Details
+      </Link>
+    </nav>
+  )
+}
+```
+
+## useLinkProps Hook
+
+Generate props for custom link components.
+
+```tsx
+import { useLinkProps } from '@tanstack/react-router'
+
+function CustomLink(props) {
+  const linkProps = useLinkProps(props)
+  
+  return (
+    <a {...linkProps} className="custom-link">
+      {props.children}
+    </a>
+  )
+}
+```
+
+## createLink Function
+
+Create custom link components with default props.
+
+```tsx
+import { createLink } from '@tanstack/react-router'
+
+const ButtonLink = createLink('button')
+
+function Navigation() {
+  return (
+    <ButtonLink 
+      to="/posts"
+      className="btn btn-primary"
+    >
+      View Posts
+    </ButtonLink>
+  )
+}
+```
+
+With custom component:
+
+```tsx
+const IconLink = createLink(
+  React.forwardRef((props, ref) => (
+    <a ref={ref} {...props}>
+      <Icon />
+      {props.children}
+    </a>
+  ))
+)
+```
+
+## Navigate Function
+
+Programmatic navigation function.
+
+```tsx
+import { useNavigate } from '@tanstack/react-router'
+
+function LoginButton() {
+  const navigate = useNavigate()
+  
+  const handleLogin = async () => {
+    await login()
+    
+    await navigate({
+      to: '/dashboard',
+      replace: true
+    })
+  }
+  
+  return <button onClick={handleLogin}>Login</button>
+}
+```
+
+## Navigate Component
+
+Declarative navigation component.
+
+```tsx
+import { Navigate } from '@tanstack/react-router'
+
+function ProtectedRoute() {
+  const { user } = useAuth()
+  
+  if (!user) {
+    return <Navigate to="/login" />
+  }
+  
+  return <Dashboard />
+}
+```
+
+## linkOptions Helper
+
+Type-safe link options without rendering.
+
+```tsx
+import { linkOptions } from '@tanstack/react-router'
+
+const postLinkOptions = linkOptions({
+  to: '/posts/$postId',
+  params: { postId: '123' }
+})
+
+// Use with Link
+<Link {...postLinkOptions}>View Post</Link>
+
+// Use with navigate
+await navigate(postLinkOptions)
+```
+
+## Examples
+
+### Basic Navigation
+
+```tsx
+import { Link } from '@tanstack/react-router'
+
+function Header() {
+  return (
+    <header>
+      <Link to="/">Home</Link>
+      <Link to="/about">About</Link>
+      <Link to="/contact">Contact</Link>
+    </header>
+  )
+}
+```
+
+### Active Link Styling
+
+```tsx
+<Link
+  to="/posts"
+  activeProps={{
+    className: 'font-bold text-blue-600',
+    style: { textDecoration: 'underline' }
+  }}
+  activeOptions={{
+    exact: false,
+    includeSearch: false
+  }}
+>
+  Posts
+</Link>
+```
+
+### Relative Navigation
+
+```tsx
+function PostNavigation() {
+  return (
+    <nav>
+      <Link to=".">Current Post</Link>
+      <Link to="./edit">Edit</Link>
+      <Link to="../">All Posts</Link>
+    </nav>
+  )
+}
+```
+
+### Search Params
+
+```tsx
+<Link
+  to="/posts"
+  search={(prev) => ({
+    ...prev,
+    page: (prev.page || 0) + 1
+  })}
+>
+  Next Page
+</Link>
+```
+
+### Preloading
+
+```tsx
+<Link
+  to="/posts/$postId"
+  params={{ postId: '123' }}
+  preload="intent"
+  preloadDelay={100}
+>
+  View Post (preloads on hover)
+</Link>
+```
+
+### Custom Link Component
+
+```tsx
+import { createLink, LinkComponent } from '@tanstack/react-router'
+
+const MyLink: LinkComponent = createLink(
+  React.forwardRef((props, ref) => {
+    const isExternal = props.href?.startsWith('http')
+    
+    return (
+      <a
+        ref={ref}
+        {...props}
+        className={`link ${props.className || ''}`}
+        {...(isExternal && {
+          target: '_blank',
+          rel: 'noopener noreferrer'
+        })}
+      >
+        {props.children}
+        {isExternal && ' ↗'}
+      </a>
+    )
+  })
+)
+```
+
+### Navigation with State
+
+```tsx
+function ItemsList() {
+  return (
+    <div>
+      {items.map(item => (
+        <Link
+          key={item.id}
+          to="/items/$itemId"
+          params={{ itemId: item.id }}
+          state={{ from: 'list' }}
+        >
+          {item.name}
+        </Link>
+      ))}
+    </div>
+  )
+}
+```
+
+### Programmatic Navigation
+
+```tsx
+import { useNavigate } from '@tanstack/react-router'
+
+function CreatePostForm() {
+  const navigate = useNavigate()
+  
+  const handleSubmit = async (data) => {
+    const post = await createPost(data)
+    
+    await navigate({
+      to: '/posts/$postId',
+      params: { postId: post.id },
+      search: { success: true },
+      replace: true
+    })
+  }
+  
+  return <form onSubmit={handleSubmit}>...</form>
+}
+```

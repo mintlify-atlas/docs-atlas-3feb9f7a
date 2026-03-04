@@ -1,0 +1,303 @@
+---
+title: Router Devtools
+description: Debug and inspect your TanStack Router application with the official devtools
+---
+
+The TanStack Router Devtools help you visualize and debug your router's state, routes, and navigation during development.
+
+## Installation
+
+<CodeGroup>
+
+```bash React
+npm install @tanstack/react-router-devtools
+# or
+pnpm add @tanstack/react-router-devtools
+# or
+yarn add @tanstack/react-router-devtools
+```
+
+```bash Solid
+npm install @tanstack/solid-router-devtools
+# or
+pnpm add @tanstack/solid-router-devtools
+# or
+yarn add @tanstack/solid-router-devtools
+```
+
+```bash Vue
+npm install @tanstack/vue-router-devtools
+# or
+pnpm add @tanstack/vue-router-devtools
+# or
+yarn add @tanstack/vue-router-devtools
+```
+
+</CodeGroup>
+
+<Note>
+The devtools are tree-shakeable and will be automatically excluded from production builds when using `process.env.NODE_ENV === 'production'`.
+</Note>
+
+## Basic Setup
+
+Add the devtools component to your root route or application component:
+
+<CodeGroup>
+
+```tsx React
+import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
+import { createRootRoute } from '@tanstack/react-router'
+
+export const Route = createRootRoute({
+  component: () => (
+    <>
+      <Outlet />
+      <TanStackRouterDevtools />
+    </>
+  ),
+})
+```
+
+```tsx Solid
+import { TanStackRouterDevtools } from '@tanstack/solid-router-devtools'
+import { createRootRoute } from '@tanstack/solid-router'
+
+export const Route = createRootRoute({
+  component: () => (
+    <>
+      <Outlet />
+      <TanStackRouterDevtools />
+    </>
+  ),
+})
+```
+
+```tsx Vue
+import { TanStackRouterDevtools } from '@tanstack/vue-router-devtools'
+
+// In your root component template
+<template>
+  <RouterView />
+  <TanStackRouterDevtools />
+</template>
+```
+
+</CodeGroup>
+
+That's it! The devtools will now appear in the bottom-right corner of your application.
+
+## Configuration Options
+
+Customize the devtools appearance and behavior:
+
+```tsx
+<TanStackRouterDevtools
+  position="bottom-right"
+  initialIsOpen={false}
+  panelProps={{
+    className: 'my-devtools-panel',
+    style: { maxHeight: '80vh' }
+  }}
+  toggleButtonProps={{
+    className: 'my-toggle-button'
+  }}
+  closeButtonProps={{
+    className: 'my-close-button'
+  }}
+/>
+```
+
+### Props
+
+<ResponseField name="position" type="'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'" default="bottom-left">
+  The position of the TanStack Router logo toggle button
+</ResponseField>
+
+<ResponseField name="initialIsOpen" type="boolean" default={false}>
+  Whether the devtools panel should be open by default
+</ResponseField>
+
+<ResponseField name="panelProps" type="HTMLAttributes<HTMLDivElement>">
+  Props to pass to the devtools panel container. Useful for adding custom styles or className
+</ResponseField>
+
+<ResponseField name="toggleButtonProps" type="ButtonHTMLAttributes<HTMLButtonElement>">
+  Props to pass to the toggle button. Can be used to customize appearance or extend onClick behavior
+</ResponseField>
+
+<ResponseField name="closeButtonProps" type="ButtonHTMLAttributes<HTMLButtonElement>">
+  Props to pass to the close button inside the panel
+</ResponseField>
+
+<ResponseField name="containerElement" type="string | React.ComponentType" default="footer">
+  The HTML element or React component to use as the container. Useful for accessibility
+</ResponseField>
+
+<ResponseField name="router" type="AnyRouter">
+  Explicitly pass a router instance. If not provided, the devtools will use the router from context
+</ResponseField>
+
+<ResponseField name="shadowDOMTarget" type="ShadowRoot">
+  Attach the devtools styles to a specific Shadow DOM root
+</ResponseField>
+
+## Using the Devtools Panel
+
+The Router Devtools provide several powerful features:
+
+### Route Tree View
+
+Visualizes your entire route tree structure:
+- See all routes and their relationships
+- Inspect route configuration (path, params, search params)
+- View which routes are currently active
+- Understand route hierarchy at a glance
+
+### Active Route Inspector
+
+Inspect the currently active route:
+- View all matched routes in the current navigation
+- See search params and their values
+- Inspect path params
+- View route context and loader data
+- Check route state and pending status
+
+### Navigation History
+
+Track your navigation history:
+- See all previous navigations
+- View the navigation stack
+- Inspect state changes over time
+- Debug navigation issues
+
+### Router State
+
+View the entire router state:
+- Current location and matches
+- Pending location and matches (during navigation)
+- Router options and configuration
+- Cached route data
+
+## Production Builds
+
+The devtools are automatically excluded from production builds:
+
+```tsx
+import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
+
+// In production, this renders null and is tree-shaken away
+<TanStackRouterDevtools />
+```
+
+If you need to include the devtools in production for debugging:
+
+```tsx
+import { TanStackRouterDevtoolsInProd } from '@tanstack/react-router-devtools'
+
+// This will always render, even in production
+<TanStackRouterDevtoolsInProd />
+```
+
+<Warning>
+Only use `TanStackRouterDevtoolsInProd` for temporary debugging in production. Remove it before deploying to end users.
+</Warning>
+
+## Standalone Panel Mode
+
+Render the devtools panel without the toggle button:
+
+```tsx
+import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
+
+// Render the panel inline in your layout
+<TanStackRouterDevtoolsPanel />
+```
+
+This is useful when:
+- Building custom developer tools
+- Creating a dedicated debugging page
+- Integrating with other devtools
+- You want full control over when/where the panel appears
+
+## Custom Styling
+
+The devtools can be styled using CSS:
+
+```tsx
+<TanStackRouterDevtools
+  panelProps={{
+    style: {
+      background: '#1a1a1a',
+      color: '#fff',
+      borderRadius: '8px',
+    }
+  }}
+  toggleButtonProps={{
+    style: {
+      background: 'linear-gradient(to right, #06b6d4, #3b82f6)',
+    }
+  }}
+/>
+```
+
+Or with CSS classes:
+
+```tsx
+<TanStackRouterDevtools
+  panelProps={{ className: 'custom-devtools-panel' }}
+  toggleButtonProps={{ className: 'custom-toggle-button' }}
+/>
+```
+
+## Shadow DOM Integration
+
+If your application uses Shadow DOM, attach the devtools styles:
+
+```tsx
+const shadowRoot = document.getElementById('shadow-host')?.shadowRoot
+
+<TanStackRouterDevtools shadowDOMTarget={shadowRoot} />
+```
+
+## Best Practices
+
+1. **Add to Root Route**: Place the devtools in your root route component so they're available throughout your app
+
+2. **Development Only**: Let the automatic tree-shaking handle production exclusion - don't manually wrap in `if (process.env.NODE_ENV === 'development')`
+
+3. **Custom Position**: Choose a position that doesn't interfere with your app's UI
+
+4. **Panel Props**: Use `panelProps` to ensure the devtools integrate well with your app's design
+
+5. **Accessibility**: Use `containerElement` to ensure proper semantic HTML structure
+
+## Deprecated Package
+
+<Warning>
+The `@tanstack/router-devtools` package is deprecated. Use the framework-specific packages instead:
+- `@tanstack/react-router-devtools` for React
+- `@tanstack/solid-router-devtools` for Solid
+- `@tanstack/vue-router-devtools` for Vue
+</Warning>
+
+## Troubleshooting
+
+### Devtools not appearing
+
+1. Ensure you're in development mode (`process.env.NODE_ENV !== 'production'`)
+2. Check that the component is rendered in your tree
+3. Verify no CSS is hiding the devtools
+
+### Type errors
+
+1. Ensure your router is properly registered in TypeScript
+2. Check that all route types are correctly inferred
+3. Update to the latest version of TanStack Router
+
+### Performance issues
+
+If the devtools impact performance:
+1. Close the panel when not in use
+2. Consider using panel mode only on a dedicated debug page
+3. Report the issue on GitHub with reproduction steps

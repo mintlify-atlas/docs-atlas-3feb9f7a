@@ -1,0 +1,616 @@
+---
+title: Deployment
+---
+
+# Deployment
+
+TanStack Start can be deployed to various hosting platforms. This guide covers deployment strategies and platform-specific configurations.
+
+## Build Process
+
+Before deploying, build your application:
+
+```bash
+npm run build
+```
+
+This creates optimized production bundles in the `.output` directory.
+
+## Deployment Targets
+
+TanStack Start uses [Nitro](https://nitro.unjs.io/) as its server engine, supporting multiple deployment targets.
+
+## Node.js Server
+
+Deploy as a standalone Node.js application:
+
+### Configuration
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite'
+import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+import { nitro } from 'nitro/vite'
+
+export default defineConfig({
+  plugins: [
+    tanstackStart(),
+    nitro(),
+  ],
+})
+```
+
+### Build and Run
+
+```bash
+# Build
+npm run build
+
+# Run production server
+node .output/server/index.mjs
+```
+
+### Environment Variables
+
+```bash
+# .env.production
+PORT=3000
+NODE_ENV=production
+DATABASE_URL=postgres://...
+```
+
+### Docker Deployment
+
+```dockerfile
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY --from=builder /app/.output /app/.output
+COPY --from=builder /app/package*.json /app/
+
+EXPOSE 3000
+
+CMD ["node", ".output/server/index.mjs"]
+```
+
+Build and run:
+
+```bash
+docker build -t my-app .
+docker run -p 3000:3000 my-app
+```
+
+## Cloudflare Workers
+
+Deploy to Cloudflare's edge network:
+
+### Configuration
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite'
+import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+import { cloudflare } from '@cloudflare/vite-plugin'
+
+export default defineConfig({
+  plugins: [
+    cloudflare({ viteEnvironment: { name: 'ssr' } }),
+    tanstackStart(),
+  ],
+})
+```
+
+### Deploy
+
+```bash
+npm run build
+npx wrangler deploy
+```
+
+### wrangler.toml
+
+```toml
+name = "my-tanstack-app"
+main = ".output/server/index.mjs"
+compatibility_date = "2024-01-01"
+
+[site]
+bucket = ".output/public"
+
+[[kv_namespaces]]
+binding = "MY_KV"
+id = "your-kv-id"
+
+[[r2_buckets]]
+binding = "MY_BUCKET"
+bucket_name = "my-bucket"
+```
+
+### Using Cloudflare Bindings
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+
+export const getData = createServerFn({ method: 'GET' }).handler(
+  async ({ context }) => {
+    // Access Cloudflare bindings
+    const env = context.cloudflare.env
+    const value = await env.MY_KV.get('key')
+    return { value }
+  },
+)
+```
+
+## Vercel
+
+Deploy to Vercel's platform:
+
+### Configuration
+
+```json
+// vercel.json
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": ".output/public",
+  "installCommand": "npm install"
+}
+```
+
+### Deploy
+
+```bash
+# Install Vercel CLI
+npm i -g vercel
+
+# Deploy
+vercel
+
+# Production deployment
+vercel --prod
+```
+
+### Environment Variables
+
+Add environment variables in the Vercel dashboard:
+
+- Settings → Environment Variables
+- Add variables for each environment (Production, Preview, Development)
+
+## Netlify
+
+Deploy to Netlify:
+
+### netlify.toml
+
+```toml
+[build]
+  command = "npm run build"
+  publish = ".output/public"
+  functions = ".output/server"
+
+[[redirects]]
+  from = "/*"
+  to = "/.netlify/functions/server"
+  status = 200
+```
+
+### Deploy
+
+```bash
+# Install Netlify CLI
+npm i -g netlify-cli
+
+# Deploy
+netlify deploy
+
+# Production deployment
+netlify deploy --prod
+```
+
+## AWS
+
+### AWS Lambda
+
+Deploy as Lambda functions:
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite'
+import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+import { nitro } from 'nitro/vite'
+
+export default defineConfig({
+  plugins: [
+    tanstackStart(),
+    nitro({
+      preset: 'aws-lambda',
+    }),
+  ],
+})
+```
+
+### AWS EC2
+
+Deploy to EC2 instances:
+
+1. Build the application
+2. Upload to EC2
+3. Install dependencies
+4. Run with PM2:
+
+```bash
+# Install PM2
+npm install -g pm2
+
+# Start application
+pm2 start .output/server/index.mjs --name "my-app"
+
+# Save configuration
+pm2 save
+pm2 startup
+```
+
+## Static Hosting
+
+For static-only deployments (no server functions):
+
+### Configuration
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite'
+import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+
+export default defineConfig({
+  plugins: [
+    tanstackStart({
+      static: true, // Enable static generation
+    }),
+  ],
+})
+```
+
+### Build
+
+```bash
+npm run build
+```
+
+Deploy the `.output/public` directory to:
+- Cloudflare Pages
+- GitHub Pages
+- Amazon S3
+- Any static host
+
+## Reverse Proxy
+
+Run behind a reverse proxy (nginx):
+
+```nginx
+server {
+    listen 80;
+    server_name example.com;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+## Environment Management
+
+### Environment Variables
+
+Create environment-specific files:
+
+```bash
+# .env.development
+VITE_API_URL=http://localhost:3000
+DATABASE_URL=postgresql://localhost/dev
+
+# .env.production
+VITE_API_URL=https://api.example.com
+DATABASE_URL=postgresql://prod-server/db
+```
+
+### Loading Environment Variables
+
+```tsx
+// Access in server functions
+export const getData = createServerFn({ method: 'GET' }).handler(async () => {
+  const apiKey = process.env.API_KEY
+  const dbUrl = process.env.DATABASE_URL
+  // Use environment variables
+})
+
+// Access in client code (must be prefixed with VITE_)
+const apiUrl = import.meta.env.VITE_API_URL
+```
+
+## Performance Optimization
+
+### Caching
+
+Implement caching strategies:
+
+```tsx
+export const Route = createFileRoute('/api/data')({
+  server: {
+    handlers: {
+      GET: async () => {
+        const data = await fetchData()
+        return Response.json(data, {
+          headers: {
+            'Cache-Control': 'public, max-age=3600, s-maxage=3600',
+            'CDN-Cache-Control': 'public, max-age=86400',
+          },
+        })
+      },
+    },
+  },
+})
+```
+
+### Compression
+
+Enable compression:
+
+```ts
+// vite.config.ts
+import compression from 'vite-plugin-compression'
+
+export default defineConfig({
+  plugins: [
+    tanstackStart(),
+    compression(),
+  ],
+})
+```
+
+### Asset Optimization
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          router: ['@tanstack/react-router'],
+        },
+      },
+    },
+  },
+})
+```
+
+## Health Checks
+
+Implement health check endpoints:
+
+```tsx
+export const Route = createFileRoute('/api/health')({
+  server: {
+    handlers: {
+      GET: async () => {
+        // Check database connection
+        const dbHealthy = await checkDatabase()
+        
+        // Check external services
+        const servicesHealthy = await checkServices()
+        
+        const healthy = dbHealthy && servicesHealthy
+        
+        return Response.json(
+          {
+            status: healthy ? 'ok' : 'error',
+            timestamp: new Date().toISOString(),
+            checks: {
+              database: dbHealthy,
+              services: servicesHealthy,
+            },
+          },
+          { status: healthy ? 200 : 503 }
+        )
+      },
+    },
+  },
+})
+```
+
+## Monitoring
+
+### Error Tracking
+
+Integrate error tracking:
+
+```tsx
+// middleware/error-tracking.ts
+import * as Sentry from '@sentry/node'
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  environment: process.env.NODE_ENV,
+})
+
+export const errorTracking = createMiddleware().server(
+  async ({ next }) => {
+    try {
+      return await next()
+    } catch (error) {
+      Sentry.captureException(error)
+      throw error
+    }
+  },
+)
+```
+
+### Logging
+
+Implement structured logging:
+
+```tsx
+import pino from 'pino'
+
+const logger = pino({
+  level: process.env.LOG_LEVEL || 'info',
+})
+
+export const loggingMiddleware = createMiddleware().server(
+  async ({ request, next }) => {
+    const start = Date.now()
+    logger.info({ url: request.url, method: request.method }, 'Request started')
+    
+    try {
+      const result = await next()
+      logger.info(
+        {
+          url: request.url,
+          method: request.method,
+          duration: Date.now() - start,
+          status: result.response.status,
+        },
+        'Request completed'
+      )
+      return result
+    } catch (error) {
+      logger.error(
+        { url: request.url, method: request.method, error },
+        'Request failed'
+      )
+      throw error
+    }
+  },
+)
+```
+
+## CI/CD
+
+### GitHub Actions
+
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run tests
+        run: npm test
+        
+      - name: Build
+        run: npm run build
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          API_KEY: ${{ secrets.API_KEY }}
+          
+      - name: Deploy
+        run: npm run deploy
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+```
+
+## Best Practices
+
+1. **Environment Variables**
+   - Never commit secrets
+   - Use different values per environment
+   - Prefix client variables with `VITE_`
+
+2. **Build Optimization**
+   - Enable compression
+   - Split vendor bundles
+   - Optimize images and assets
+
+3. **Monitoring**
+   - Set up error tracking
+   - Implement health checks
+   - Monitor performance metrics
+
+4. **Security**
+   - Use HTTPS in production
+   - Set security headers
+   - Implement rate limiting
+   - Keep dependencies updated
+
+5. **Scaling**
+   - Use CDN for static assets
+   - Implement caching strategies
+   - Consider serverless for auto-scaling
+
+6. **Backup & Recovery**
+   - Automate database backups
+   - Document recovery procedures
+   - Test disaster recovery
+
+## Troubleshooting
+
+### Build Errors
+
+```bash
+# Clear cache and rebuild
+rm -rf .output node_modules
+npm install
+npm run build
+```
+
+### Runtime Errors
+
+Check logs:
+
+```bash
+# Node.js
+node .output/server/index.mjs
+
+# PM2
+pm2 logs my-app
+
+# Docker
+docker logs container-name
+```
+
+### Performance Issues
+
+- Enable compression
+- Check database query performance
+- Review bundle sizes
+- Implement caching
+
+## Next Steps
+
+- Learn about [Static Generation](./static-generation)
+- Explore [API Routes](./api-routes)
+- Review [Middleware](./middleware) patterns

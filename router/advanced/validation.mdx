@@ -1,0 +1,329 @@
+---
+title: Search Params Validation
+description: Learn how to validate and type-safe search parameters using validation adapters like Zod, Valibot, and ArkType
+---
+
+TanStack Router provides powerful type-safe search parameter validation through pluggable validation adapters. This allows you to validate and transform search params using your preferred validation library.
+
+## Overview
+
+Search param validation ensures that URL query parameters match expected types and formats before they're used in your application. TanStack Router supports multiple validation libraries through adapter packages.
+
+## Supported Validation Libraries
+
+TanStack Router provides official adapters for:
+
+- **Zod** - `@tanstack/zod-adapter`
+- **Valibot** - `@tanstack/valibot-adapter`
+- **ArkType** - `@tanstack/arktype-adapter`
+
+## Using Zod Adapter
+
+The Zod adapter provides integration with the popular Zod validation library.
+
+### Installation
+
+```bash
+npm install @tanstack/zod-adapter zod
+```
+
+### Basic Usage
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router'
+import { zodValidator } from '@tanstack/zod-adapter'
+import { z } from 'zod'
+
+export const Route = createFileRoute('/users')({n  validateSearch: zodValidator(
+    z.object({
+      search: z.string().optional(),
+      page: z.number().int().min(1).optional(),
+      sort: z.enum(['name', 'email', 'created']).optional(),
+    })
+  ),
+  component: Users,
+})
+```
+
+### Using Fallback Values
+
+The Zod adapter provides a `fallback` helper for providing default values when validation fails:
+
+```tsx
+import { fallback, zodValidator } from '@tanstack/zod-adapter'
+import { z } from 'zod'
+
+export const Route = createFileRoute('/users')({n  validateSearch: zodValidator(
+    z.object({
+      search: fallback(z.string().optional(), undefined),
+      page: fallback(z.number().int().min(1), 1),
+    })
+  ),
+})
+```
+
+The `fallback` function ensures that if validation fails, the specified fallback value is used instead of throwing an error.
+
+### Advanced Zod Options
+
+The `zodValidator` function accepts options to control input/output types:
+
+```tsx
+import { zodValidator } from '@tanstack/zod-adapter'
+import { z } from 'zod'
+
+const schema = z.object({
+  date: z.string().transform(val => new Date(val)),
+})
+
+export const Route = createFileRoute('/events')({n  validateSearch: zodValidator({
+    schema,
+    input: 'input',  // Use schema's input type
+    output: 'output', // Use schema's output type (after transforms)
+  }),
+})
+```
+
+## Using Valibot Adapter
+
+Valibot is a lightweight validation library with excellent TypeScript support.
+
+### Installation
+
+```bash
+npm install @tanstack/valibot-adapter valibot
+```
+
+### Basic Usage
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router'
+import { valibotValidator } from '@tanstack/valibot-adapter'
+import * as v from 'valibot'
+
+export const Route = createFileRoute('/products')({n  validateSearch: v.object({
+    category: v.optional(v.string()),
+    minPrice: v.optional(v.number()),
+    maxPrice: v.optional(v.number()),
+  }),
+  component: Products,
+})
+```
+
+Note: With Valibot, you can use the schema directly without a wrapper function in most cases.
+
+### Using Fallback Values
+
+```tsx
+import * as v from 'valibot'
+
+export const Route = createFileRoute('/products')({n  validateSearch: v.object({
+    search: v.fallback(v.optional(v.string(), ''), ''),
+    page: v.fallback(v.optional(v.number()), 1),
+  }),
+})
+```
+
+## Using ArkType Adapter
+
+ArkType provides ultra-fast runtime validation with concise syntax.
+
+### Installation
+
+```bash
+npm install @tanstack/arktype-adapter arktype
+```
+
+### Basic Usage
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router'
+import { arkTypeValidator } from '@tanstack/arktype-adapter'
+import { type } from 'arktype'
+
+const searchSchema = type({
+  query: 'string',
+  page: 'number = 1',
+  'sort?': "'name' | 'date'",
+})
+
+export const Route = createFileRoute('/search')({n  validateSearch: searchSchema,
+  component: Search,
+})
+```
+
+ArkType's syntax allows inline default values using the `=` operator:
+
+```tsx
+const schema = type({
+  search: 'string = ""',      // Defaults to empty string
+  page: 'number = 1',          // Defaults to 1
+  'perPage?': 'number',        // Optional field
+})
+```
+
+## Type Safety
+
+All validation adapters provide full type safety. The validated search params are automatically typed:
+
+```tsx
+function MyComponent() {
+  const search = Route.useSearch()
+  // search is fully typed based on your validator schema
+  console.log(search.page) // number | undefined
+  console.log(search.sort) // 'name' | 'email' | 'created' | undefined
+}
+```
+
+## Accessing Search Params
+
+There are multiple ways to access validated search params:
+
+### In Components
+
+```tsx
+function MyComponent() {
+  const search = Route.useSearch()
+  return <div>Search: {search.query}</div>
+}
+```
+
+### With Selectors
+
+```tsx
+function MyComponent() {
+  const query = Route.useSearch({
+    select: (search) => search.query ?? ''
+  })
+  return <div>Search: {query}</div>
+}
+```
+
+### In Loaders
+
+```tsx
+export const Route = createFileRoute('/users')({n  validateSearch: zodValidator(
+    z.object({
+      search: z.string().optional(),
+    })
+  ),
+  loader: ({ search }) => {
+    // search is fully typed
+    return fetchUsers(search.search)
+  },
+})
+```
+
+### In beforeLoad
+
+```tsx
+export const Route = createFileRoute('/users')({n  validateSearch: zodValidator(
+    z.object({
+      filter: z.string().optional(),
+    })
+  ),
+  beforeLoad: ({ search }) => {
+    // search is fully typed
+    console.log(search.filter)
+  },
+})
+```
+
+## Validation Errors
+
+By default, validation errors will throw and can be caught by error boundaries. Use fallback values or optional fields to handle invalid params gracefully:
+
+```tsx
+import { fallback, zodValidator } from '@tanstack/zod-adapter'
+import { z } from 'zod'
+
+// This won't throw on invalid page numbers
+export const Route = createFileRoute('/items')({n  validateSearch: zodValidator(
+    z.object({
+      page: fallback(z.number().int().min(1), 1),
+    })
+  ),
+})
+```
+
+## Loader Dependencies
+
+Combine search validation with loader dependencies to optimize data fetching:
+
+```tsx
+export const Route = createFileRoute('/users')({n  validateSearch: zodValidator(
+    z.object({
+      search: z.string().optional(),
+      page: z.number().int().min(1).optional(),
+    })
+  ),
+  loaderDeps: ({ search }) => ({
+    search: search.search,
+    page: search.page ?? 1,
+  }),
+  loader: async ({ deps }) => {
+    return fetchUsers({
+      search: deps.search,
+      page: deps.page,
+    })
+  },
+})
+```
+
+This ensures the loader only re-runs when the specific search params change.
+
+## Custom Validation
+
+You can also use plain functions for validation without an adapter:
+
+```tsx
+export const Route = createFileRoute('/custom')({n  validateSearch: (search: Record<string, unknown>) => {
+    return {
+      page: Number(search.page) || 1,
+      query: String(search.query || ''),
+    }
+  },
+})
+```
+
+However, using adapters provides better error handling and TypeScript inference.
+
+## Creating Custom Adapters
+
+You can create adapters for other validation libraries by implementing the `ValidatorAdapter` interface:
+
+```tsx
+import type { ValidatorAdapter } from '@tanstack/react-router'
+
+export function myValidator<TSchema extends MySchema>(
+  schema: TSchema,
+): ValidatorAdapter<InputType<TSchema>, OutputType<TSchema>> {
+  return {
+    types: {
+      input: null as any,
+      output: null as any,
+    },
+    parse: (input) => schema.parse(input),
+  }
+}
+```
+
+The adapter needs to provide:
+- `types`: TypeScript type information for input and output
+- `parse`: A function that validates and transforms the input
+
+## Best Practices
+
+1. **Use fallback values** for non-critical params to avoid validation errors
+2. **Keep schemas simple** - complex validation can impact performance
+3. **Use optional fields** for params that may not always be present
+4. **Combine with loaderDeps** to optimize data fetching
+5. **Validate at the route level** rather than in components for consistency
+6. **Use enums** for params with limited valid values
+7. **Document expected formats** in schema using `.describe()` (Zod) or comments
+
+## Related
+
+- [Search Params Concept](/router/concepts/search-params)
+- [Search Middleware](/router/advanced/middleware)
+- [Loaders](/router/concepts/loaders)

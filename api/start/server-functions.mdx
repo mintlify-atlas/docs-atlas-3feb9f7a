@@ -1,0 +1,508 @@
+---
+title: Server Functions API
+---
+
+# Server Functions
+
+Create type-safe server functions that can be called from the client with full end-to-end type safety.
+
+## createServerFn
+
+Create a server function with automatic serialization, RPC, and type safety.
+
+```tsx
+import { createServerFn } from '@tanstack/start'
+
+const getPosts = createServerFn({ method: 'GET' })
+  .handler(async () => {
+    const posts = await db.posts.findMany()
+    return posts
+  })
+
+// Call from client
+const posts = await getPosts()
+```
+
+### Method Configuration
+
+<ParamField path="method" type="'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'">
+  HTTP method for the server function.
+  
+  **Default:** `'GET'`
+  
+  ```tsx
+  const createPost = createServerFn({ method: 'POST' })
+  const updatePost = createServerFn({ method: 'PATCH' })
+  const deletePost = createServerFn({ method: 'DELETE' })
+  ```
+</ParamField>
+
+## Server Function Builder
+
+Chainable builder API for creating server functions.
+
+### .middleware()
+
+Add middleware to process requests and responses.
+
+```tsx
+const authMiddleware = createMiddleware()
+  .server(async ({ next, context }) => {
+    const session = await getSession(context.request)
+    
+    if (!session) {
+      throw new Error('Unauthorized')
+    }
+    
+    return next({
+      context: {
+        session,
+        userId: session.userId
+      }
+    })
+  })
+
+const getMyPosts = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    // context.userId is available from middleware
+    const posts = await db.posts.findMany({
+      where: { authorId: context.userId }
+    })
+    return posts
+  })
+```
+
+### .inputValidator()
+
+Validate input data with Zod, Valibot, or custom validators.
+
+```tsx
+import { createServerFn } from '@tanstack/start'
+import { z } from 'zod'
+
+const createPost = createServerFn({ method: 'POST' })
+  .inputValidator(z.object({
+    title: z.string().min(1).max(100),
+    content: z.string(),
+    tags: z.array(z.string()).optional()
+  }))
+  .handler(async ({ data }) => {
+    // data is fully typed and validated
+    const post = await db.posts.create({
+      data: {
+        title: data.title,
+        content: data.content,
+        tags: data.tags
+      }
+    })
+    return post
+  })
+
+// Call with validated input
+await createPost({
+  data: {
+    title: 'Hello World',
+    content: 'My first post'
+  }
+})
+```
+
+### .handler()
+
+Define the server function implementation.
+
+```tsx
+const getPost = createServerFn({ method: 'GET' })
+  .handler(async ({ data }) => {
+    const post = await db.posts.findUnique({
+      where: { id: data.postId }
+    })
+    
+    if (!post) {
+      throw notFound()
+    }
+    
+    return post
+  })
+```
+
+## Handler Context
+
+The handler function receives a context object:
+
+<ResponseField name="data" type="ValidatedInput">
+  Validated input data (if inputValidator is used).
+</ResponseField>
+
+<ResponseField name="context" type="ServerFnContext">
+  Combined context from middleware and global context.
+</ResponseField>
+
+<ResponseField name="request" type="Request">
+  The underlying HTTP request object.
+</ResponseField>
+
+<ResponseField name="signal" type="AbortSignal">
+  Abort signal for cancelling the request.
+</ResponseField>
+
+## Calling Server Functions
+
+### From Client
+
+```tsx
+import { getPosts, createPost } from './server-functions'
+
+function PostsList() {
+  const [posts, setPosts] = useState([])
+  
+  useEffect(() => {
+    getPosts().then(setPosts)
+  }, [])
+  
+  const handleCreate = async () => {
+    const newPost = await createPost({
+      data: {
+        title: 'New Post',
+        content: 'Content here'
+      }
+    })
+    setPosts([...posts, newPost])
+  }
+  
+  return (
+    <div>
+      {posts.map(post => (
+        <div key={post.id}>{post.title}</div>
+      ))}
+      <button onClick={handleCreate}>Create Post</button>
+    </div>
+  )
+}
+```
+
+### From Route Loaders
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router'
+import { getPosts } from './server-functions'
+
+export const Route = createFileRoute('/posts')({
+  loader: async () => {
+    const posts = await getPosts()
+    return { posts }
+  }
+})
+```
+
+### From Other Server Functions
+
+```tsx
+const getPostsWithComments = createServerFn({ method: 'GET' })
+  .handler(async () => {
+    // Call another server function
+    const posts = await getPosts()
+    
+    const postsWithComments = await Promise.all(
+      posts.map(async (post) => ({
+        ...post,
+        comments: await getComments({ data: { postId: post.id } })
+      }))
+    )
+    
+    return postsWithComments
+  })
+```
+
+## Middleware
+
+Create reusable middleware for server functions.
+
+### createMiddleware
+
+```tsx
+import { createMiddleware } from '@tanstack/start'
+
+const loggingMiddleware = createMiddleware()
+  .server(async ({ next, context }) => {
+    const start = Date.now()
+    console.log('Request started')
+    
+    const result = await next()
+    
+    const duration = Date.now() - start
+    console.log(`Request completed in ${duration}ms`)
+    
+    return result
+  })
+```
+
+### Authentication Middleware
+
+```tsx
+const authMiddleware = createMiddleware()
+  .server(async ({ next, context }) => {
+    const session = await getSession(context.request)
+    
+    if (!session) {
+      throw redirect({ to: '/login' })
+    }
+    
+    return next({
+      context: {
+        session,
+        user: session.user
+      }
+    })
+  })
+
+const getMyProfile = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    return context.user
+  })
+```
+
+### Database Transaction Middleware
+
+```tsx
+const dbTransactionMiddleware = createMiddleware()
+  .server(async ({ next, context }) => {
+    return await db.$transaction(async (tx) => {
+      return next({
+        context: {
+          db: tx
+        }
+      })
+    })
+  })
+```
+
+## Error Handling
+
+### Try-Catch
+
+```tsx
+const getPost = createServerFn({ method: 'GET' })
+  .handler(async ({ data }) => {
+    try {
+      const post = await db.posts.findUnique({
+        where: { id: data.postId }
+      })
+      
+      if (!post) {
+        throw notFound()
+      }
+      
+      return post
+    } catch (error) {
+      console.error('Error fetching post:', error)
+      throw error
+    }
+  })
+```
+
+### Client Error Handling
+
+```tsx
+try {
+  const post = await getPost({ data: { postId: '123' } })
+} catch (error) {
+  if (isNotFound(error)) {
+    console.log('Post not found')
+  } else if (isRedirect(error)) {
+    // Handle redirect
+  } else {
+    console.error('Error:', error)
+  }
+}
+```
+
+## File Uploads
+
+Handle file uploads with FormData.
+
+```tsx
+const uploadFile = createServerFn({ method: 'POST' })
+  .handler(async ({ data }) => {
+    // data is FormData when Content-Type is multipart/form-data
+    const file = data.get('file') as File
+    
+    if (!file) {
+      throw new Error('No file provided')
+    }
+    
+    // Process the file
+    const buffer = await file.arrayBuffer()
+    const saved = await saveFile(buffer, file.name)
+    
+    return { url: saved.url }
+  })
+
+// Client usage
+function FileUpload() {
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    
+    const formData = new FormData(e.target)
+    const result = await uploadFile({ data: formData })
+    
+    console.log('Uploaded:', result.url)
+  }
+  
+  return (
+    <form onSubmit={handleSubmit}>
+      <input type="file" name="file" />
+      <button type="submit">Upload</button>
+    </form>
+  )
+}
+```
+
+## Examples
+
+### CRUD Operations
+
+```tsx
+import { createServerFn } from '@tanstack/start'
+import { z } from 'zod'
+
+// List
+export const getPosts = createServerFn({ method: 'GET' })
+  .handler(async () => {
+    return await db.posts.findMany({
+      orderBy: { createdAt: 'desc' }
+    })
+  })
+
+// Read
+export const getPost = createServerFn({ method: 'GET' })
+  .inputValidator(z.object({
+    id: z.string()
+  }))
+  .handler(async ({ data }) => {
+    const post = await db.posts.findUnique({
+      where: { id: data.id }
+    })
+    
+    if (!post) {
+      throw notFound()
+    }
+    
+    return post
+  })
+
+// Create
+export const createPost = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .inputValidator(z.object({
+    title: z.string().min(1),
+    content: z.string()
+  }))
+  .handler(async ({ data, context }) => {
+    return await db.posts.create({
+      data: {
+        ...data,
+        authorId: context.userId
+      }
+    })
+  })
+
+// Update
+export const updatePost = createServerFn({ method: 'PATCH' })
+  .middleware([authMiddleware])
+  .inputValidator(z.object({
+    id: z.string(),
+    title: z.string().optional(),
+    content: z.string().optional()
+  }))
+  .handler(async ({ data, context }) => {
+    // Check ownership
+    const post = await db.posts.findUnique({
+      where: { id: data.id }
+    })
+    
+    if (post?.authorId !== context.userId) {
+      throw new Error('Unauthorized')
+    }
+    
+    return await db.posts.update({
+      where: { id: data.id },
+      data: {
+        title: data.title,
+        content: data.content
+      }
+    })
+  })
+
+// Delete
+export const deletePost = createServerFn({ method: 'DELETE' })
+  .middleware([authMiddleware])
+  .inputValidator(z.object({
+    id: z.string()
+  }))
+  .handler(async ({ data, context }) => {
+    const post = await db.posts.findUnique({
+      where: { id: data.id }
+    })
+    
+    if (post?.authorId !== context.userId) {
+      throw new Error('Unauthorized')
+    }
+    
+    await db.posts.delete({
+      where: { id: data.id }
+    })
+    
+    return { success: true }
+  })
+```
+
+### Authenticated API
+
+```tsx
+import { createServerFn, createMiddleware } from '@tanstack/start'
+
+// Auth middleware
+const requireAuth = createMiddleware()
+  .server(async ({ next, context }) => {
+    const token = context.request.headers.get('Authorization')
+    
+    if (!token) {
+      throw new Error('No token provided')
+    }
+    
+    const user = await verifyToken(token.replace('Bearer ', ''))
+    
+    if (!user) {
+      throw new Error('Invalid token')
+    }
+    
+    return next({
+      context: { user }
+    })
+  })
+
+// Protected endpoint
+export const getProfile = createServerFn({ method: 'GET' })
+  .middleware([requireAuth])
+  .handler(async ({ context }) => {
+    return await db.users.findUnique({
+      where: { id: context.user.id }
+    })
+  })
+
+export const updateProfile = createServerFn({ method: 'PATCH' })
+  .middleware([requireAuth])
+  .inputValidator(z.object({
+    name: z.string().optional(),
+    email: z.string().email().optional()
+  }))
+  .handler(async ({ data, context }) => {
+    return await db.users.update({
+      where: { id: context.user.id },
+      data
+    })
+  })
+```

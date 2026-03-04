@@ -1,0 +1,683 @@
+---
+title: Quick Start
+description: Get up and running with TanStack Router in minutes. Learn how to create routes, navigate between pages, and build your first routing application.
+---
+
+# Quick Start
+
+This guide will help you create your first TanStack Router application from scratch. You'll learn how to define routes, create navigation, and set up a working router in just a few minutes.
+
+<Note>
+  This guide uses React, but the concepts apply to Solid and Vue as well. The main differences are in the import paths and component syntax.
+</Note>
+
+## Prerequisites
+
+Before you begin, make sure you have:
+
+- Completed the [Installation](/router/installation) guide
+- A React, Solid, or Vue project set up
+- Basic knowledge of TypeScript
+
+## Choose Your Approach
+
+TanStack Router supports two routing approaches:
+
+<CardGroup cols={2}>
+  <Card title="Code-Based Routing" icon="code">
+    Define routes programmatically with full control over route configuration. Best for smaller applications or when you need precise control.
+  </Card>
+  
+  <Card title="File-Based Routing" icon="folder">
+    Automatically generate routes from your file system. Best for larger applications and faster development.
+  </Card>
+</CardGroup>
+
+This guide covers **code-based routing**. For file-based routing, see the [File-Based Routing guide](/router/guides/file-based-routing).
+
+## Step 1: Create the Root Route
+
+Every TanStack Router application starts with a root route. This is the layout that wraps all other routes.
+
+Create your main application file (e.g., `main.tsx`):
+
+```tsx
+import { StrictMode } from 'react'
+import ReactDOM from 'react-dom/client'
+import {
+  Link,
+  Outlet,
+  RouterProvider,
+  createRootRoute,
+  createRouter,
+} from '@tanstack/react-router'
+import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
+
+// Create the root route
+const rootRoute = createRootRoute({
+  component: () => (
+    <>
+      <div className="p-2 flex gap-2">
+        <Link to="/" className="[&.active]:font-bold">
+          Home
+        </Link>
+        <Link to="/about" className="[&.active]:font-bold">
+          About
+        </Link>
+      </div>
+      <hr />
+      <Outlet />
+      <TanStackRouterDevtools />
+    </>
+  ),
+})
+```
+
+Source: examples/react/quickstart/src/main.tsx:1-30
+
+<Note>
+  The `Outlet` component is where child routes will be rendered. It works like a placeholder for nested content.
+</Note>
+
+## Step 2: Create Route Definitions
+
+Now define your application routes using `createRoute`:
+
+```tsx
+// Home route
+const indexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  component: function Index() {
+    return (
+      <div className="p-2">
+        <h3>Welcome Home!</h3>
+      </div>
+    )
+  },
+})
+
+// About route  
+const aboutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/about',
+  component: function About() {
+    return <div className="p-2">Hello from About!</div>
+  },
+})
+```
+
+Source: examples/react/quickstart/src/main.tsx:32-50
+
+<Accordion title="Understanding Route Configuration">
+  Each route created with `createRoute` requires:
+  
+  - **`getParentRoute`**: A function that returns the parent route
+  - **`path`**: The URL path for this route (use `/` for index routes)
+  - **`component`**: The React component to render for this route
+  
+  Optional properties include `loader`, `beforeLoad`, `errorComponent`, and many more.
+</Accordion>
+
+## Step 3: Build the Route Tree
+
+Combine your routes into a tree structure:
+
+```tsx
+const routeTree = rootRoute.addChildren([indexRoute, aboutRoute])
+```
+
+Source: examples/react/quickstart/src/main.tsx:52
+
+For nested routes, you can nest the `addChildren` calls:
+
+```tsx
+const routeTree = rootRoute.addChildren([
+  indexRoute,
+  postsRoute.addChildren([
+    postsIndexRoute,
+    postDetailRoute,
+  ]),
+])
+```
+
+## Step 4: Create the Router Instance
+
+Create your router with the route tree and configuration:
+
+```tsx
+const router = createRouter({
+  routeTree,
+  defaultPreload: 'intent',
+  scrollRestoration: true,
+})
+```
+
+Source: examples/react/quickstart/src/main.tsx:54-58
+
+<ParamField path="routeTree" type="RouteTree" required>
+  The tree of routes created in the previous step.
+</ParamField>
+
+<ParamField path="defaultPreload" type="'intent' | 'render' | false" default="false">
+  When to preload routes:
+  - `'intent'`: Preload on hover or focus
+  - `'render'`: Preload when the link is rendered
+  - `false`: No automatic preloading
+</ParamField>
+
+<ParamField path="scrollRestoration" type="boolean" default="false">
+  Whether to automatically restore scroll position when navigating.
+</ParamField>
+
+<ParamField path="defaultStaleTime" type="number" default="0">
+  How long (in milliseconds) to cache route loader data.
+</ParamField>
+
+## Step 5: Register Router for Type Safety
+
+Register your router type to enable TypeScript autocomplete and type checking:
+
+```tsx
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router
+  }
+}
+```
+
+Source: examples/react/quickstart/src/main.tsx:60-64
+
+<Warning>
+  Without this type registration, you won't get autocomplete for routes and parameters. Don't skip this step!
+</Warning>
+
+## Step 6: Render the Application
+
+Finally, render your router:
+
+```tsx
+const rootElement = document.getElementById('app')!
+if (!rootElement.innerHTML) {
+  const root = ReactDOM.createRoot(rootElement)
+  root.render(
+    <StrictMode>
+      <RouterProvider router={router} />
+    </StrictMode>
+  )
+}
+```
+
+Source: examples/react/quickstart/src/main.tsx:66-74
+
+## Complete Example
+
+Here's the complete working example:
+
+<CodeGroup>
+```tsx React
+import { StrictMode } from 'react'
+import ReactDOM from 'react-dom/client'
+import {
+  Link,
+  Outlet,
+  RouterProvider,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router'
+import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
+
+const rootRoute = createRootRoute({
+  component: () => (
+    <>
+      <div className="p-2 flex gap-2">
+        <Link to="/" className="[&.active]:font-bold">
+          Home
+        </Link>
+        <Link to="/about" className="[&.active]:font-bold">
+          About
+        </Link>
+      </div>
+      <hr />
+      <Outlet />
+      <TanStackRouterDevtools />
+    </>
+  ),
+})
+
+const indexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  component: function Index() {
+    return (
+      <div className="p-2">
+        <h3>Welcome Home!</h3>
+      </div>
+    )
+  },
+})
+
+const aboutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/about',
+  component: function About() {
+    return <div className="p-2">Hello from About!</div>
+  },
+})
+
+const routeTree = rootRoute.addChildren([indexRoute, aboutRoute])
+
+const router = createRouter({
+  routeTree,
+  defaultPreload: 'intent',
+  scrollRestoration: true,
+})
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router
+  }
+}
+
+const rootElement = document.getElementById('app')!
+if (!rootElement.innerHTML) {
+  const root = ReactDOM.createRoot(rootElement)
+  root.render(
+    <StrictMode>
+      <RouterProvider router={router} />
+    </StrictMode>
+  )
+}
+```
+
+```tsx Solid
+import { render } from 'solid-js/web'
+import {
+  Link,
+  Outlet,
+  RouterProvider,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/solid-router'
+import { TanStackRouterDevtools } from '@tanstack/solid-router-devtools'
+
+const rootRoute = createRootRoute({
+  component: () => (
+    <>
+      <div class="p-2 flex gap-2">
+        <Link to="/" class="[&.active]:font-bold" activeOptions={{ exact: true }}>
+          Home
+        </Link>
+        <Link to="/about" class="[&.active]:font-bold">
+          About
+        </Link>
+      </div>
+      <hr />
+      <Outlet />
+      <TanStackRouterDevtools />
+    </>
+  ),
+})
+
+const indexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  component: function Index() {
+    return (
+      <div class="p-2">
+        <h3>Welcome Home!</h3>
+      </div>
+    )
+  },
+})
+
+const aboutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/about',
+  component: function About() {
+    return <div class="p-2">Hello from About!</div>
+  },
+})
+
+const routeTree = rootRoute.addChildren([indexRoute, aboutRoute])
+
+const router = createRouter({
+  routeTree,
+  defaultPreload: 'intent',
+  scrollRestoration: true,
+})
+
+declare module '@tanstack/solid-router' {
+  interface Register {
+    router: typeof router
+  }
+}
+
+const rootElement = document.getElementById('app')!
+if (!rootElement.innerHTML) {
+  render(() => <RouterProvider router={router} />, rootElement)
+}
+```
+
+```tsx Vue
+import { createApp } from 'vue'
+import {
+  Link,
+  Outlet,
+  RouterProvider,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/vue-router'
+import { TanStackRouterDevtools } from '@tanstack/vue-router-devtools'
+
+const rootRoute = createRootRoute({
+  component: () => (
+    <>
+      <div class="p-2 flex gap-2">
+        <Link to="/" class="[&.active]:font-bold" activeOptions={{ exact: true }}>
+          Home
+        </Link>
+        <Link to="/about" class="[&.active]:font-bold">
+          About
+        </Link>
+      </div>
+      <hr />
+      <Outlet />
+      <TanStackRouterDevtools router={router} />
+    </>
+  ),
+})
+
+const indexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  component: function Index() {
+    return (
+      <div class="p-2">
+        <h3>Welcome Home!</h3>
+      </div>
+    )
+  },
+})
+
+const aboutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/about',
+  component: function About() {
+    return <div class="p-2">Hello from About!</div>
+  },
+})
+
+const routeTree = rootRoute.addChildren([indexRoute, aboutRoute])
+
+const router = createRouter({
+  routeTree,
+  defaultPreload: 'intent',
+  scrollRestoration: true,
+})
+
+declare module '@tanstack/vue-router' {
+  interface Register {
+    router: typeof router
+  }
+}
+
+const rootElement = document.getElementById('app')!
+if (!rootElement.innerHTML) {
+  createApp({
+    setup() {
+      return () => <RouterProvider router={router} />
+    },
+  }).mount('#app')
+}
+```
+</CodeGroup>
+
+Source: examples/react/quickstart/src/main.tsx, examples/solid/basic/src/main.tsx:1-80, examples/vue/basic/src/main.tsx:1-80
+
+## Adding Data Loading
+
+TanStack Router can load data for routes automatically. Add a `loader` to fetch data before rendering:
+
+```tsx
+import { createRoute } from '@tanstack/react-router'
+
+interface Post {
+  id: string
+  title: string
+  body: string
+}
+
+const postRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts/$postId',
+  loader: async ({ params }) => {
+    const response = await fetch(
+      `https://jsonplaceholder.typicode.com/posts/${params.postId}`
+    )
+    return response.json() as Promise<Post>
+  },
+  component: function Post() {
+    const post = postRoute.useLoaderData()
+    return (
+      <div className="p-2">
+        <h3>{post.title}</h3>
+        <p>{post.body}</p>
+      </div>
+    )
+  },
+})
+```
+
+Source: examples/react/basic/src/main.tsx:102-128
+
+<Note>
+  Route params like `$postId` are automatically typed and validated. TypeScript will enforce the correct parameter names throughout your application.
+</Note>
+
+## Adding Search Parameters
+
+Handle URL search parameters with type safety:
+
+```tsx
+import { createRoute } from '@tanstack/react-router'
+import { z } from 'zod'
+
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts',
+  validateSearch: z.object({
+    page: z.number().catch(1),
+    filter: z.string().optional(),
+  }),
+  component: function Posts() {
+    const { page, filter } = postsRoute.useSearch()
+    return (
+      <div>
+        <h3>Posts - Page {page}</h3>
+        {filter && <p>Filter: {filter}</p>}
+      </div>
+    )
+  },
+})
+```
+
+## Using the DevTools
+
+The TanStack Router DevTools help you debug your routing:
+
+```tsx
+import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
+
+function RootComponent() {
+  return (
+    <>
+      <Outlet />
+      {/* DevTools appear as a fixed toggle in the corner */}
+      <TanStackRouterDevtools />
+    </>
+  )
+}
+```
+
+Source: examples/react/quickstart/src/main.tsx:27
+
+<Accordion title="DevTools Features">
+  The DevTools provide:
+  
+  - **Route Explorer**: View your complete route tree
+  - **Current Matches**: See which routes are currently active
+  - **Route Loader Data**: Inspect data loaded by each route
+  - **Search Params**: View and edit current search parameters
+  - **Cache Inspector**: Monitor route data cache state
+  - **Performance Metrics**: Track route loading and rendering times
+</Accordion>
+
+<Warning>
+  The DevTools are automatically tree-shaken in production builds, so you don't need to worry about removing them for production.
+</Warning>
+
+## Navigation Patterns
+
+TanStack Router provides multiple ways to navigate:
+
+### Using Link Components
+
+```tsx
+import { Link } from '@tanstack/react-router'
+
+// Basic navigation
+<Link to="/about">About</Link>
+
+// With parameters
+<Link to="/posts/$postId" params={{ postId: '123' }}>View Post</Link>
+
+// With search params
+<Link to="/posts" search={{ page: 2, filter: 'recent' }}>Page 2</Link>
+
+// Active state styling
+<Link 
+  to="/about" 
+  activeProps={{ className: 'font-bold' }}
+  activeOptions={{ exact: true }}
+>
+  About
+</Link>
+```
+
+Source: examples/react/quickstart/src/main.tsx:18-23
+
+### Programmatic Navigation
+
+```tsx
+import { useNavigate } from '@tanstack/react-router'
+
+function MyComponent() {
+  const navigate = useNavigate()
+  
+  const handleClick = () => {
+    navigate({ to: '/about' })
+  }
+  
+  return <button onClick={handleClick}>Go to About</button>
+}
+```
+
+### Navigation with State
+
+```tsx
+// Navigate with state
+navigate({ 
+  to: '/posts/$postId',
+  params: { postId: '123' },
+  search: { highlight: true },
+  replace: false, // or true to replace history entry
+})
+```
+
+## Error Handling
+
+Handle errors gracefully with error components:
+
+```tsx
+import { ErrorComponent } from '@tanstack/react-router'
+import type { ErrorComponentProps } from '@tanstack/react-router'
+
+const postRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts/$postId',
+  loader: async ({ params }) => {
+    const response = await fetch(`/api/posts/${params.postId}`)
+    if (!response.ok) {
+      throw new Error('Post not found')
+    }
+    return response.json()
+  },
+  errorComponent: function PostError({ error }: ErrorComponentProps) {
+    return (
+      <div>
+        <h3>Error loading post</h3>
+        <p>{error.message}</p>
+      </div>
+    )
+  },
+  component: PostComponent,
+})
+```
+
+Source: examples/react/basic/src/main.tsx:102-116
+
+## Next Steps
+
+Now that you have a working router, explore more advanced features:
+
+<CardGroup cols={2}>
+  <Card title="File-Based Routing" icon="folder" href="/router/file-based-routing">
+    Automatically generate routes from your file system
+  </Card>
+  
+  <Card title="Data Loading" icon="database" href="/router/data-loading">
+    Learn advanced data loading patterns and caching
+  </Card>
+  
+  <Card title="Search Params" icon="magnifying-glass" href="/router/search-params">
+    Master type-safe URL state management
+  </Card>
+  
+  <Card title="Authenticated Routes" icon="lock" href="/router/authenticated-routes">
+    Protect routes and handle authentication
+  </Card>
+</CardGroup>
+
+## Common Issues
+
+### Routes Not Matching
+
+If your routes aren't matching:
+
+1. Ensure paths don't have trailing slashes (use `/about`, not `/about/`)
+2. Check that child routes are properly added with `addChildren`
+3. Verify your root route is registered correctly
+
+### TypeScript Errors
+
+If you're seeing type errors:
+
+1. Make sure you've registered your router type with the `declare module` block
+2. Ensure you're using TypeScript 5.4 or higher
+3. Try restarting your TypeScript server in your editor
+
+### Link Not Active
+
+If active link styling isn't working:
+
+1. Use `activeOptions={{ exact: true }}` for exact matching
+2. Ensure you're using `activeProps` or `activeClass` correctly
+3. Check that your route paths match the `to` prop exactly
+
+<Note>
+  Need more help? Check out our [GitHub Discussions](https://github.com/TanStack/router/discussions) or join our [Discord community](https://discord.com/invite/WrRKjPJ).
+</Note>

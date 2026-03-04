@@ -1,0 +1,428 @@
+---
+title: Client RPC API
+---
+
+# Client RPC
+
+Client-side utilities for calling server functions with streaming, abort signals, and custom fetch options.
+
+## useServerFn
+
+React hook for calling server functions with loading states.
+
+```tsx
+import { useServerFn } from '@tanstack/react-start'
+import { getPosts } from './server-functions'
+
+function PostsList() {
+  const getPostsFn = useServerFn(getPosts)
+  
+  return (
+    <button onClick={() => getPostsFn()}>
+      Refresh Posts
+    </button>
+  )
+}
+```
+
+## Custom Fetch Options
+
+Pass custom fetch options when calling server functions.
+
+```tsx
+import { getPosts } from './server-functions'
+
+// With custom headers
+const posts = await getPosts({
+  headers: {
+    'Authorization': 'Bearer token',
+    'X-Custom-Header': 'value'
+  }
+})
+
+// With abort signal
+const controller = new AbortController()
+
+const posts = await getPosts({
+  signal: controller.signal
+})
+
+// Cancel the request
+controller.abort()
+```
+
+## Streaming Responses
+
+Server functions support streaming responses for large datasets or real-time updates.
+
+### Server-Side Streaming
+
+```tsx
+import { createServerFn } from '@tanstack/start'
+
+const streamLogs = createServerFn({ method: 'GET' })
+  .handler(async function* ({ data }) => {
+    // Generator function for streaming
+    const logs = await db.logs.findMany({
+      where: { sessionId: data.sessionId },
+      orderBy: { timestamp: 'asc' }
+    })
+    
+    for (const log of logs) {
+      yield log
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+  })
+```
+
+### Client-Side Consumption
+
+```tsx
+import { streamLogs } from './server-functions'
+
+function LogViewer({ sessionId }) {
+  const [logs, setLogs] = useState([])
+  
+  useEffect(() => {
+    const stream = streamLogs({ data: { sessionId } })
+    
+    ;(async () => {
+      for await (const log of stream) {
+        setLogs(prev => [...prev, log])
+      }
+    })()
+  }, [sessionId])
+  
+  return (
+    <div>
+      {logs.map(log => (
+        <div key={log.id}>{log.message}</div>
+      ))}
+    </div>
+  )
+}
+```
+
+## Error Handling
+
+Handle errors from server functions on the client.
+
+```tsx
+import { isNotFound, isRedirect } from '@tanstack/start'
+import { getPost } from './server-functions'
+
+function PostDetails({ postId }) {
+  const [error, setError] = useState(null)
+  
+  const loadPost = async () => {
+    try {
+      const post = await getPost({ data: { id: postId } })
+      return post
+    } catch (err) {
+      if (isNotFound(err)) {
+        setError('Post not found')
+      } else if (isRedirect(err)) {
+        // Handle redirect
+        console.log('Redirecting to:', err.to)
+      } else {
+        setError('An error occurred')
+      }
+    }
+  }
+  
+  return (
+    <div>
+      {error && <div className="error">{error}</div>}
+      <button onClick={loadPost}>Load Post</button>
+    </div>
+  )
+}
+```
+
+## Request Deduplication
+
+Multiple concurrent calls to the same server function are automatically deduplicated.
+
+```tsx
+import { getPost } from './server-functions'
+
+function Component() {
+  useEffect(() => {
+    // These three calls will result in only one network request
+    getPost({ data: { id: '1' } })
+    getPost({ data: { id: '1' } })
+    getPost({ data: { id: '1' } })
+  }, [])
+}
+```
+
+## Custom Fetch
+
+Provide a custom fetch implementation.
+
+```tsx
+import { getPosts } from './server-functions'
+
+const customFetch = async (url, options) => {
+  console.log('Fetching:', url)
+  return fetch(url, options)
+}
+
+const posts = await getPosts({
+  fetch: customFetch
+})
+```
+
+## Serialization
+
+Server functions automatically serialize and deserialize complex data types.
+
+### Supported Types
+
+- Primitives (string, number, boolean, null, undefined)
+- Objects and Arrays
+- Date objects
+- RegExp objects
+- Map and Set
+- Error objects
+- Custom serializable types
+
+### Example
+
+```tsx
+const getEvent = createServerFn({ method: 'GET' })
+  .handler(async () => {
+    return {
+      id: '1',
+      title: 'Event',
+      date: new Date('2024-01-01'),
+      attendees: new Set(['user1', 'user2']),
+      metadata: new Map([['key', 'value']])
+    }
+  })
+
+// Client automatically receives properly typed objects
+const event = await getEvent()
+event.date instanceof Date // true
+event.attendees instanceof Set // true
+event.metadata instanceof Map // true
+```
+
+## Server Function Context
+
+Access request context on the client.
+
+```tsx
+import { getServerContext } from '@tanstack/start'
+
+function MyComponent() {
+  // Only works during SSR or in server components
+  const context = getServerContext()
+  
+  if (context) {
+    console.log('Request URL:', context.request.url)
+  }
+}
+```
+
+## Examples
+
+### Form Submission
+
+```tsx
+import { useServerFn } from '@tanstack/react-start'
+import { createPost } from './server-functions'
+
+function CreatePostForm() {
+  const createPostFn = useServerFn(createPost)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    
+    try {
+      const formData = new FormData(e.target)
+      const post = await createPostFn({
+        data: {
+          title: formData.get('title'),
+          content: formData.get('content')
+        }
+      })
+      
+      console.log('Created:', post)
+      e.target.reset()
+    } catch (error) {
+      console.error('Failed to create post:', error)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+  
+  return (
+    <form onSubmit={handleSubmit}>
+      <input name="title" placeholder="Title" required />
+      <textarea name="content" placeholder="Content" required />
+      <button type="submit" disabled={isSubmitting}>
+        {isSubmitting ? 'Creating...' : 'Create Post'}
+      </button>
+    </form>
+  )
+}
+```
+
+### Infinite Scroll
+
+```tsx
+import { useInfiniteQuery } from '@tanstack/react-query'
+import { getPosts } from './server-functions'
+
+function InfinitePostsList() {
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage
+  } = useInfiniteQuery({
+    queryKey: ['posts'],
+    queryFn: async ({ pageParam = 0 }) => {
+      return await getPosts({
+        data: { 
+          offset: pageParam,
+          limit: 20 
+        }
+      })
+    },
+    getNextPageParam: (lastPage, pages) => {
+      return lastPage.length === 20 ? pages.length * 20 : undefined
+    }
+  })
+  
+  return (
+    <div>
+      {data?.pages.map((page, i) => (
+        <div key={i}>
+          {page.map(post => (
+            <div key={post.id}>{post.title}</div>
+          ))}
+        </div>
+      ))}
+      
+      {hasNextPage && (
+        <button 
+          onClick={() => fetchNextPage()}
+          disabled={isFetchingNextPage}
+        >
+          {isFetchingNextPage ? 'Loading...' : 'Load More'}
+        </button>
+      )}
+    </div>
+  )
+}
+```
+
+### Real-time Updates
+
+```tsx
+import { streamMessages } from './server-functions'
+
+function ChatRoom({ roomId }) {
+  const [messages, setMessages] = useState([])
+  const [isConnected, setIsConnected] = useState(false)
+  
+  useEffect(() => {
+    const controller = new AbortController()
+    
+    ;(async () => {
+      try {
+        setIsConnected(true)
+        const stream = streamMessages({
+          data: { roomId },
+          signal: controller.signal
+        })
+        
+        for await (const message of stream) {
+          setMessages(prev => [...prev, message])
+        }
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          console.error('Stream error:', error)
+        }
+      } finally {
+        setIsConnected(false)
+      }
+    })()
+    
+    return () => controller.abort()
+  }, [roomId])
+  
+  return (
+    <div>
+      <div className={isConnected ? 'connected' : 'disconnected'}>
+        {isConnected ? 'Connected' : 'Disconnected'}
+      </div>
+      
+      <div className="messages">
+        {messages.map(msg => (
+          <div key={msg.id}>{msg.text}</div>
+        ))}
+      </div>
+    </div>
+  )
+}
+```
+
+### Optimistic Updates
+
+```tsx
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { createPost } from './server-functions'
+
+function OptimisticPostCreator() {
+  const queryClient = useQueryClient()
+  
+  const mutation = useMutation({
+    mutationFn: createPost,
+    onMutate: async (newPost) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['posts'] })
+      
+      // Snapshot previous value
+      const previousPosts = queryClient.getQueryData(['posts'])
+      
+      // Optimistically update
+      queryClient.setQueryData(['posts'], (old) => [
+        { ...newPost, id: 'temp', createdAt: new Date() },
+        ...old
+      ])
+      
+      return { previousPosts }
+    },
+    onError: (err, newPost, context) => {
+      // Rollback on error
+      queryClient.setQueryData(['posts'], context.previousPosts)
+    },
+    onSettled: () => {
+      // Refetch after success or error
+      queryClient.invalidateQueries({ queryKey: ['posts'] })
+    }
+  })
+  
+  return (
+    <form onSubmit={(e) => {
+      e.preventDefault()
+      const formData = new FormData(e.target)
+      mutation.mutate({
+        data: {
+          title: formData.get('title'),
+          content: formData.get('content')
+        }
+      })
+    }}>
+      <input name="title" />
+      <textarea name="content" />
+      <button type="submit">Create</button>
+    </form>
+  )
+}
+```

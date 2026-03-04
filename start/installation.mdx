@@ -1,0 +1,409 @@
+---
+title: "Installation"
+description: "Install TanStack Start for React, Solid, or Vue"
+---
+
+## Prerequisites
+
+Before installing TanStack Start, ensure you have:
+
+- **Node.js**: Version 22.12.0 or higher
+- **Package Manager**: npm, yarn, or pnpm
+- **Vite**: Version 7.0.0 or higher (installed automatically)
+
+<Warning>
+TanStack Start requires Node.js 22.12.0 or higher. Make sure to update your Node.js version before proceeding.
+</Warning>
+
+## Choose Your Framework
+
+TanStack Start is available for React, Solid, and Vue. Select your framework below:
+
+<Tabs>
+  <Tab title="React">
+    ## React Installation
+
+    Install TanStack Start for React along with its peer dependencies:
+
+    <CodeGroup>
+    ```bash npm
+    npm install @tanstack/react-start @tanstack/react-router
+    ```
+    ```bash yarn
+    yarn add @tanstack/react-start @tanstack/react-router
+    ```
+    ```bash pnpm
+    pnpm add @tanstack/react-start @tanstack/react-router
+    ```
+    </CodeGroup>
+
+    ### Peer Dependencies
+
+    TanStack Start for React requires:
+
+    - `react` >= 18.0.0 or >= 19.0.0
+    - `react-dom` >= 18.0.0 or >= 19.0.0
+    - `vite` >= 7.0.0
+
+    These should be installed in your project:
+
+    ```bash
+    npm install react react-dom vite
+    ```
+
+    ### Development Dependencies
+
+    For TypeScript support and optimal development experience:
+
+    ```bash
+    npm install -D @types/react @types/react-dom typescript
+    ```
+
+    ### Optional: Router Devtools
+
+    For debugging and inspecting your router state:
+
+    ```bash
+    npm install @tanstack/react-router-devtools
+    ```
+  </Tab>
+  
+  <Tab title="Solid">
+    ## Solid Installation
+
+    Install TanStack Start for Solid along with its peer dependencies:
+
+    <CodeGroup>
+    ```bash npm
+    npm install @tanstack/solid-start @tanstack/solid-router
+    ```
+    ```bash yarn
+    yarn add @tanstack/solid-start @tanstack/solid-router
+    ```
+    ```bash pnpm
+    pnpm add @tanstack/solid-start @tanstack/solid-router
+    ```
+    </CodeGroup>
+
+    ### Peer Dependencies
+
+    TanStack Start for Solid requires:
+
+    - `solid-js` >= 1.0.0
+    - `vite` >= 7.0.0
+
+    These should be installed in your project:
+
+    ```bash
+    npm install solid-js vite vite-plugin-solid
+    ```
+
+    ### Development Dependencies
+
+    For TypeScript support:
+
+    ```bash
+    npm install -D typescript
+    ```
+
+    ### Optional: Router Devtools
+
+    For debugging and inspecting your router state:
+
+    ```bash
+    npm install @tanstack/solid-router-devtools
+    ```
+  </Tab>
+  
+  <Tab title="Vue">
+    ## Vue Installation
+
+    Install TanStack Start for Vue along with its peer dependencies:
+
+    <CodeGroup>
+    ```bash npm
+    npm install @tanstack/vue-start @tanstack/vue-router
+    ```
+    ```bash yarn
+    yarn add @tanstack/vue-start @tanstack/vue-router
+    ```
+    ```bash pnpm
+    pnpm add @tanstack/vue-start @tanstack/vue-router
+    ```
+    </CodeGroup>
+
+    ### Peer Dependencies
+
+    TanStack Start for Vue requires:
+
+    - `vue` >= 3.3.0
+    - `vite` >= 7.0.0
+
+    These should be installed in your project:
+
+    ```bash
+    npm install vue vite @vitejs/plugin-vue
+    ```
+
+    ### Development Dependencies
+
+    For TypeScript support:
+
+    ```bash
+    npm install -D typescript @vue/tsconfig
+    ```
+
+    ### Optional: Router Devtools
+
+    For debugging and inspecting your router state:
+
+    ```bash
+    npm install @tanstack/vue-router-devtools
+    ```
+  </Tab>
+</Tabs>
+
+## Vite Configuration
+
+After installing the packages, configure Vite to use the TanStack Start plugin:
+
+<Tabs>
+  <Tab title="React">
+    Create or update your `vite.config.ts`:
+
+    ```ts vite.config.ts
+    import { defineConfig } from 'vite'
+    import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+    import viteReact from '@vitejs/plugin-react'
+    import { nitro } from 'nitro/vite'
+
+    export default defineConfig({
+      plugins: [
+        tanstackStart(),
+        viteReact(),
+        nitro(),
+      ],
+    })
+    ```
+
+    ### Plugin Order
+
+    The plugin order is important:
+    1. `tanstackStart()` - Must come first to transform server functions
+    2. `viteReact()` - React plugin for JSX transformation
+    3. `nitro()` - Server bundling and deployment
+  </Tab>
+  
+  <Tab title="Solid">
+    Create or update your `vite.config.ts`:
+
+    ```ts vite.config.ts
+    import { defineConfig } from 'vite'
+    import { tanstackStart } from '@tanstack/solid-start/plugin/vite'
+    import viteSolid from 'vite-plugin-solid'
+    import { nitro } from 'nitro/vite'
+
+    export default defineConfig({
+      plugins: [
+        tanstackStart(),
+        viteSolid({ ssr: true }),
+        nitro(),
+      ],
+    })
+    ```
+
+    ### Plugin Order
+
+    The plugin order is important:
+    1. `tanstackStart()` - Must come first to transform server functions
+    2. `viteSolid({ ssr: true })` - Solid plugin with SSR enabled
+    3. `nitro()` - Server bundling and deployment
+  </Tab>
+  
+  <Tab title="Vue">
+    Create or update your `vite.config.ts`:
+
+    ```ts vite.config.ts
+    import { defineConfig } from 'vite'
+    import { tanstackStart } from '@tanstack/vue-start/plugin/vite'
+    import viteVue from '@vitejs/plugin-vue'
+    import { nitro } from 'nitro/vite'
+
+    export default defineConfig({
+      plugins: [
+        tanstackStart(),
+        viteVue(),
+        nitro(),
+      ],
+    })
+    ```
+
+    ### Plugin Order
+
+    The plugin order is important:
+    1. `tanstackStart()` - Must come first to transform server functions
+    2. `viteVue()` - Vue plugin for SFC transformation
+    3. `nitro()` - Server bundling and deployment
+  </Tab>
+</Tabs>
+
+## TypeScript Configuration
+
+For optimal TypeScript support, configure your `tsconfig.json`:
+
+<Tabs>
+  <Tab title="React">
+    ```json tsconfig.json
+    {
+      "compilerOptions": {
+        "target": "ES2020",
+        "module": "ESNext",
+        "lib": ["ES2020", "DOM", "DOM.Iterable"],
+        "jsx": "react-jsx",
+        "strict": true,
+        "moduleResolution": "bundler",
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "allowSyntheticDefaultImports": true,
+        "forceConsistentCasingInFileNames": true,
+        "types": ["vite/client"]
+      },
+      "include": ["src/**/*"],
+      "exclude": ["node_modules"]
+    }
+    ```
+  </Tab>
+  <Tab title="Solid">
+    ```json tsconfig.json
+    {
+      "compilerOptions": {
+        "target": "ES2020",
+        "module": "ESNext",
+        "lib": ["ES2020", "DOM", "DOM.Iterable"],
+        "jsx": "preserve",
+        "jsxImportSource": "solid-js",
+        "strict": true,
+        "moduleResolution": "bundler",
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "allowSyntheticDefaultImports": true,
+        "forceConsistentCasingInFileNames": true,
+        "types": ["vite/client"]
+      },
+      "include": ["src/**/*"],
+      "exclude": ["node_modules"]
+    }
+    ```
+  </Tab>
+  <Tab title="Vue">
+    ```json tsconfig.json
+    {
+      "extends": "@vue/tsconfig/tsconfig.dom.json",
+      "compilerOptions": {
+        "target": "ES2020",
+        "module": "ESNext",
+        "lib": ["ES2020", "DOM", "DOM.Iterable"],
+        "strict": true,
+        "moduleResolution": "bundler",
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "allowSyntheticDefaultImports": true,
+        "forceConsistentCasingInFileNames": true,
+        "types": ["vite/client"]
+      },
+      "include": ["src/**/*"],
+      "exclude": ["node_modules"]
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Package Scripts
+
+Add these scripts to your `package.json`:
+
+```json package.json
+{
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node .output/server/index.mjs"
+  }
+}
+```
+
+- **`dev`**: Starts the development server with hot module replacement
+- **`build`**: Builds the production application
+- **`preview`**: Previews the production build locally
+- **`start`**: Runs the production server (after build)
+
+## Nitro Installation
+
+TanStack Start uses [Nitro](https://nitro.unjs.io/) for server bundling and deployment. Install it as a dev dependency:
+
+```bash
+npm install -D nitro
+```
+
+Nitro provides:
+
+- Universal deployment adapters
+- Auto-detected platform configuration
+- Production-optimized server builds
+- Support for serverless and edge runtimes
+
+## Directory Structure
+
+Create the following directory structure for your project:
+
+```
+my-app/
+├── src/
+│   ├── routes/           # File-based routes
+│   │   ├── __root.tsx    # Root route
+│   │   └── index.tsx     # Home page
+│   ├── router.tsx        # Router configuration
+│   └── routeTree.gen.ts  # Generated route tree
+├── public/               # Static assets
+├── vite.config.ts        # Vite configuration
+├── tsconfig.json         # TypeScript configuration
+└── package.json          # Package manifest
+```
+
+## Verification
+
+Verify your installation by checking the installed versions:
+
+```bash
+npm list @tanstack/react-start @tanstack/react-router
+# or
+npm list @tanstack/solid-start @tanstack/solid-router
+# or
+npm list @tanstack/vue-start @tanstack/vue-router
+```
+
+You should see version 1.166.1 or higher.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Tutorial" icon="rocket" href="/start/quickstart">
+    Build your first TanStack Start application with server functions
+  </Card>
+  <Card title="Server Functions" icon="code" href="/start/concepts/server-functions">
+    Learn how to create and use server functions
+  </Card>
+  <Card title="SSR Setup" icon="server" href="/start/concepts/ssr">
+    Configure server-side rendering for your app
+  </Card>
+  <Card title="Deployment" icon="cloud" href="/start/concepts/deployment">
+    Deploy your application to production
+  </Card>
+</CardGroup>

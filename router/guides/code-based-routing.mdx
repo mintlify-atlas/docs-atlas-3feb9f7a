@@ -1,0 +1,447 @@
+---
+title: Code-Based Routing
+---
+
+# Code-Based Routing
+
+Code-based routing gives you complete programmatic control over your route tree. While file-based routing is recommended for most applications, code-based routing is useful for dynamic route generation, migration from other routers, or specific architectural requirements.
+
+## Overview
+
+With code-based routing, you manually define routes using the `createRoute` and `createRootRoute` functions, then compose them into a route tree.
+
+## Basic Setup
+
+<Steps>
+  <Step title="Install TanStack Router">
+    <CodeGroup>
+    ```bash npm
+    npm install @tanstack/react-router
+    ```
+
+    ```bash pnpm
+    pnpm add @tanstack/react-router
+    ```
+
+    ```bash yarn
+    yarn add @tanstack/react-router
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Create the Root Route">
+    Every router needs a root route:
+
+    ```tsx
+    import { createRootRoute, Outlet } from '@tanstack/react-router'
+
+    const rootRoute = createRootRoute({
+      component: () => (
+        <>
+          <div>Navigation here</div>
+          <hr />
+          <Outlet />
+        </>
+      ),
+    })
+    ```
+  </Step>
+
+  <Step title="Create Child Routes">
+    Define your application routes:
+
+    ```tsx
+    import { createRoute } from '@tanstack/react-router'
+
+    const indexRoute = createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/',
+      component: () => <div>Welcome Home!</div>,
+    })
+
+    const aboutRoute = createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/about',
+      component: () => <div>About Page</div>,
+    })
+    ```
+  </Step>
+
+  <Step title="Build the Route Tree">
+    Compose routes into a tree:
+
+    ```tsx
+    const routeTree = rootRoute.addChildren([
+      indexRoute,
+      aboutRoute,
+    ])
+    ```
+  </Step>
+
+  <Step title="Create and Register the Router">
+    ```tsx
+    import { createRouter, RouterProvider } from '@tanstack/react-router'
+
+    const router = createRouter({ routeTree })
+
+    declare module '@tanstack/react-router' {
+      interface Register {
+        router: typeof router
+      }
+    }
+
+    function App() {
+      return <RouterProvider router={router} />
+    }
+    ```
+  </Step>
+</Steps>
+
+## Complete Example
+
+Here's a full example from the TanStack Router source:
+
+```tsx src/main.tsx
+import ReactDOM from 'react-dom/client'
+import {
+  Link,
+  Outlet,
+  RouterProvider,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router'
+import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
+
+// Root route
+const rootRoute = createRootRoute({
+  component: RootComponent,
+})
+
+function RootComponent() {
+  return (
+    <>
+      <div className="p-2 flex gap-2 text-lg">
+        <Link to="/" className="[&.active]:font-bold">
+          Home
+        </Link>
+        <Link to="/posts" className="[&.active]:font-bold">
+          Posts
+        </Link>
+      </div>
+      <hr />
+      <Outlet />
+      <TanStackRouterDevtools />
+    </>
+  )
+}
+
+// Index route
+const indexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  component: () => <div className="p-2">Welcome Home!</div>,
+})
+
+// Posts layout route
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'posts',
+  loader: () => fetchPosts(),
+  component: PostsComponent,
+})
+
+function PostsComponent() {
+  const posts = postsRoute.useLoaderData()
+  return (
+    <div className="p-2 flex gap-2">
+      <ul className="list-disc pl-4">
+        {posts.map((post) => (
+          <li key={post.id}>
+            <Link
+              to="/posts/$postId"
+              params={{ postId: post.id }}
+              className="hover:underline"
+            >
+              {post.title}
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <hr />
+      <Outlet />
+    </div>
+  )
+}
+
+// Posts index route
+const postsIndexRoute = createRoute({
+  getParentRoute: () => postsRoute,
+  path: '/',
+  component: () => <div>Select a post</div>,
+})
+
+// Post detail route
+const postRoute = createRoute({
+  getParentRoute: () => postsRoute,
+  path: '$postId',
+  loader: ({ params }) => fetchPost(params.postId),
+  component: PostComponent,
+})
+
+function PostComponent() {
+  const post = postRoute.useLoaderData()
+  return (
+    <div className="space-y-2">
+      <h4 className="text-xl font-bold">{post.title}</h4>
+      <div>{post.body}</div>
+    </div>
+  )
+}
+
+// Build the route tree
+const routeTree = rootRoute.addChildren([
+  indexRoute,
+  postsRoute.addChildren([
+    postsIndexRoute,
+    postRoute,
+  ]),
+])
+
+// Create the router
+const router = createRouter({
+  routeTree,
+  defaultPreload: 'intent',
+})
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router
+  }
+}
+
+// Render
+const rootElement = document.getElementById('app')!
+if (!rootElement.innerHTML) {
+  const root = ReactDOM.createRoot(rootElement)
+  root.render(<RouterProvider router={router} />)
+}
+```
+
+## Route Configuration Options
+
+### Path Parameters
+
+Define dynamic route segments with `$` prefix:
+
+```tsx
+const userRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/users/$userId',
+  loader: ({ params }) => fetchUser(params.userId),
+  component: UserComponent,
+})
+```
+
+### Pathless Routes
+
+Create layout routes without adding path segments:
+
+```tsx
+const authLayoutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: '_auth', // Use 'id' instead of 'path'
+  component: AuthLayout,
+})
+
+const dashboardRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: '/dashboard',
+  component: Dashboard,
+})
+
+// Results in /dashboard with AuthLayout wrapping
+```
+
+### Data Loading
+
+Load data before rendering:
+
+```tsx
+const postRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts/$postId',
+  loader: async ({ params, context }) => {
+    const post = await fetchPost(params.postId)
+    return { post }
+  },
+  component: PostComponent,
+})
+```
+
+### Error Handling
+
+Customize error and not found components:
+
+```tsx
+import { ErrorComponent } from '@tanstack/react-router'
+
+const postRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts/$postId',
+  loader: ({ params }) => fetchPost(params.postId),
+  errorComponent: ({ error }) => <ErrorComponent error={error} />,
+  notFoundComponent: () => <div>Post not found</div>,
+  component: PostComponent,
+})
+```
+
+## Advanced Patterns
+
+### Nested Route Trees
+
+Build complex hierarchies:
+
+```tsx
+const routeTree = rootRoute.addChildren([
+  indexRoute,
+  authLayoutRoute.addChildren([
+    dashboardRoute,
+    settingsRoute.addChildren([
+      profileRoute,
+      securityRoute,
+    ]),
+  ]),
+  publicRoute,
+])
+```
+
+### Route Guards
+
+Protect routes with `beforeLoad`:
+
+```tsx
+const protectedRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/dashboard',
+  beforeLoad: ({ context, location }) => {
+    if (!context.auth.isAuthenticated) {
+      throw redirect({
+        to: '/login',
+        search: { redirect: location.href },
+      })
+    }
+  },
+  component: Dashboard,
+})
+```
+
+### Lazy Loading Routes
+
+Split code with `.lazy()`:
+
+```tsx
+// posts.tsx
+export const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'posts',
+  loader: () => fetchPosts(),
+}).lazy(() => import('./posts.lazy').then((d) => d.Route))
+
+// posts.lazy.tsx
+import { createLazyRoute } from '@tanstack/react-router'
+
+export const Route = createLazyRoute('/posts')({
+  component: PostsComponent,
+})
+
+function PostsComponent() {
+  const posts = Route.useLoaderData()
+  return <div>...</div>
+}
+```
+
+## Router Configuration
+
+Customize router behavior:
+
+```tsx
+const router = createRouter({
+  routeTree,
+  
+  // Default preload behavior
+  defaultPreload: 'intent', // 'intent' | 'viewport' | false
+  
+  // Preload delay
+  defaultPreloadDelay: 50,
+  
+  // Data staleness
+  defaultStaleTime: 5000,
+  
+  // Scroll restoration
+  scrollRestoration: true,
+  
+  // Context passed to all routes
+  context: {
+    auth: authService,
+    queryClient,
+  },
+  
+  // Not found handling
+  defaultNotFoundComponent: () => <div>404 Not Found</div>,
+})
+```
+
+## Type Safety
+
+Register your router for full type safety:
+
+```tsx
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router
+  }
+}
+```
+
+This enables:
+- Type-safe route paths in `Link` and `navigate`
+- Type-safe params and search params
+- Type-safe loader data
+- Autocomplete for routes throughout your app
+
+## When to Use Code-Based Routing
+
+<CardGroup cols={2}>
+  <Card title="Dynamic Routes" icon="wand-magic-sparkles">
+    Generate routes programmatically based on configuration or API data
+  </Card>
+  
+  <Card title="Migration" icon="arrow-right">
+    Easier migration path from other routers like React Router or Next.js
+  </Card>
+  
+  <Card title="Monorepos" icon="diagram-project">
+    Share routes across multiple applications in a monorepo
+  </Card>
+  
+  <Card title="Fine Control" icon="sliders">
+    Need precise control over route composition and organization
+  </Card>
+</CardGroup>
+
+<Note>
+  **Recommendation**: For most applications, file-based routing provides better DX and is easier to maintain. Use code-based routing when you have specific requirements that file-based routing can't satisfy.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="File-Based Routing" href="./file-based-routing">
+    Learn about the recommended file-based approach
+  </Card>
+  
+  <Card title="Code Splitting" href="./code-splitting">
+    Optimize your bundle with lazy loading
+  </Card>
+</CardGroup>

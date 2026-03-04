@@ -1,0 +1,476 @@
+---
+title: Caching
+---
+
+# Caching
+
+TanStack Router includes built-in caching for loader data, preventing unnecessary refetches and providing instant navigation. The caching system is automatic, configurable, and designed for optimal performance.
+
+## Why Caching Matters
+
+Effective caching delivers major benefits:
+
+- **Faster navigation** - Revisiting routes is instant when cached
+- **Reduced server load** - Fewer redundant API requests
+- **Better UX** - No loading spinners for recently visited routes
+- **Offline resilience** - Cached data available without network
+
+TanStack Router's caching is inspired by React Query's proven approach.
+
+## How Caching Works
+
+Every route match has its own cache entry identified by:
+
+1. **Route path** - The matched route
+2. **Path parameters** - Values of `$param` segments
+3. **Loader dependencies** - Values from `loaderDeps`
+
+Example cache keys:
+```
+/posts/$postId + { postId: '123' } + { version: 1 }
+/posts/$postId + { postId: '456' } + { version: 1 }
+/posts + {} + { page: 1, filter: 'react' }
+```
+
+Each unique combination gets its own cache entry.
+
+## Cache Lifecycle
+
+Cached data goes through distinct phases:
+
+```
+Loader runs
+    |
+    v
+[Fresh: 0-staleTime] ← Uses cached data, no refetch
+    |
+    v
+[Stale: staleTime-gcTime] ← Uses cached data, refetches in background
+    |
+    v
+[Garbage Collected: after gcTime] ← Data removed, loader runs
+```
+
+### Stale Time
+
+How long data is considered fresh:
+
+```tsx
+export const Route = createFileRoute('/posts')({
+  staleTime: 10_000, // Fresh for 10 seconds
+  loader: async () => {
+    return { posts: await fetchPosts() }
+  },
+})
+```
+
+Within stale time:
+- Cached data used immediately
+- No loader execution
+- No loading states
+
+### Garbage Collection Time
+
+How long to keep data in cache:
+
+```tsx
+export const Route = createFileRoute('/posts')({
+  staleTime: 10_000,   // Fresh for 10s
+  gcTime: 5 * 60_000,  // Keep in cache for 5 minutes
+  loader: async () => {
+    return { posts: await fetchPosts() }
+  },
+})
+```
+
+After GC time:
+- Data removed from cache
+- Next navigation runs loader fresh
+
+From `packages/router-core/src/router.ts:232-287`, the defaults are:
+- `defaultStaleTime`: 0 (always stale)
+- `defaultGcTime`: 30 minutes
+
+## Global Cache Configuration
+
+Set defaults for all routes:
+
+```tsx
+import { createRouter } from '@tanstack/react-router'
+
+const router = createRouter({
+  routeTree,
+  
+  // Fresh for 5 seconds by default
+  defaultStaleTime: 5_000,
+  
+  // Keep in cache for 10 minutes
+  defaultGcTime: 10 * 60_000,
+  
+  // Prefetch cache times
+  defaultPreloadStaleTime: 30_000,
+  defaultPreloadGcTime: 30 * 60_000,
+})
+```
+
+Individual routes can override these defaults.
+
+## Per-Route Cache Configuration
+
+Fine-tune caching per route:
+
+```tsx
+export const Route = createFileRoute('/posts')({
+  // Data changes frequently - always fetch
+  staleTime: 0,
+  gcTime: 60_000,
+  
+  loader: async () => {
+    return { posts: await fetchPosts() }
+  },
+})
+
+export const ProfileRoute = createFileRoute('/profile')({
+  // Data rarely changes - cache aggressively
+  staleTime: 5 * 60_000,  // 5 minutes
+  gcTime: 30 * 60_000,     // 30 minutes
+  
+  loader: async () => {
+    return { profile: await fetchProfile() }
+  },
+})
+```
+
+Match cache strategy to data characteristics.
+
+## Cache Keys and Dependencies
+
+Cache keys include loader dependencies from `loaderDeps`.
+
+### Basic Dependencies
+
+```tsx
+import { z } from 'zod'
+
+export const Route = createFileRoute('/posts')({
+  validateSearch: z.object({
+    page: z.number().default(1),
+    filter: z.string().optional(),
+  }),
+  
+  loaderDeps: ({ search }) => ({
+    page: search.page,
+    filter: search.filter,
+  }),
+  
+  loader: async ({ deps }) => {
+    return fetchPosts(deps.page, deps.filter)
+  },
+})
+```
+
+Cache entries:
+- `/posts` + `{ page: 1, filter: undefined }`
+- `/posts` + `{ page: 2, filter: undefined }`
+- `/posts` + `{ page: 1, filter: 'react' }`
+
+Each combination is cached separately.
+
+### Path Parameters in Cache
+
+Path params automatically part of cache key:
+
+```tsx
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    return { post: await fetchPost(params.postId) }
+  },
+})
+```
+
+Cache entries:
+- `/posts/$postId` + `{ postId: '123' }`
+- `/posts/$postId` + `{ postId: '456' }`
+
+No need to include params in `loaderDeps`.
+
+## Cache Invalidation
+
+Manually invalidate cached data:
+
+```tsx
+import { useRouter } from '@tanstack/react-router'
+
+function PostEditor() {
+  const router = useRouter()
+  
+  const handleSave = async (post: Post) => {
+    await savePost(post)
+    
+    // Invalidate posts list
+    router.invalidate({
+      filter: (route) => route.id === '/posts',
+    })
+  }
+  
+  return <PostForm onSave={handleSave} />
+}
+```
+
+### Invalidate All Routes
+
+```tsx
+// Invalidate everything
+router.invalidate()
+```
+
+Useful after logout or global data changes.
+
+### Invalidate Specific Routes
+
+```tsx
+// Invalidate by route ID
+router.invalidate({
+  filter: (route) => route.id === '/posts/$postId',
+})
+
+// Invalidate multiple routes
+router.invalidate({
+  filter: (route) => route.id.startsWith('/dashboard'),
+})
+```
+
+## Reloading Routes
+
+Force reload without cache:
+
+```tsx
+import { useRouter } from '@tanstack/react-router'
+
+function RefreshButton() {
+  const router = useRouter()
+  
+  const handleRefresh = () => {
+    // Force reload current route
+    router.navigate({
+      to: '.',
+      replace: true,
+    })
+  }
+  
+  return <button onClick={handleRefresh}>Refresh</button>
+}
+```
+
+### shouldReload
+
+Control reload behavior per route:
+
+```tsx
+export const Route = createFileRoute('/posts')({
+  loader: async () => fetchPosts(),
+  
+  shouldReload: ({ match }) => {
+    // Only reload on enter, not on stay
+    return match.cause === 'enter'
+  },
+})
+```
+
+From `packages/router-core/src/route.ts:930-945`, `cause` can be:
+- `'enter'` - Navigating to this route
+- `'stay'` - Already on this route
+- `'preload'` - Prefetching
+
+## LRU Cache Implementation
+
+TanStack Router uses an LRU (Least Recently Used) cache implementation from `packages/router-core/src/lru-cache.ts:7-74`:
+
+```typescript
+export function createLRUCache<TKey, TValue>(max: number): LRUCache<TKey, TValue> {
+  type Node = { prev?: Node; next?: Node; key: TKey; value: TValue }
+  const cache = new Map<TKey, Node>()
+  let oldest: Node | undefined
+  let newest: Node | undefined
+  
+  // Cache automatically evicts oldest entries when max is reached
+}
+```
+
+This ensures memory usage stays bounded even with many route combinations.
+
+## Optimistic Updates
+
+Update cache before server confirms:
+
+```tsx
+import { useRouter } from '@tanstack/react-router'
+
+function useOptimisticPost() {
+  const router = useRouter()
+  
+  const updatePost = async (postId: string, updates: Partial<Post>) => {
+    // Get current cached data
+    const match = router.state.matches.find(
+      m => m.routeId === '/posts/$postId'
+    )
+    const currentData = match?.loaderData
+    
+    // Update cache optimistically
+    router.setRouteData('/posts/$postId', {
+      ...currentData,
+      ...updates,
+    })
+    
+    try {
+      // Save to server
+      await savePost(postId, updates)
+    } catch (error) {
+      // Rollback on error
+      router.setRouteData('/posts/$postId', currentData)
+      throw error
+    }
+  }
+  
+  return { updatePost }
+}
+```
+
+## Integration with React Query
+
+Combine TanStack Router caching with React Query:
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router'
+import { queryOptions, useSuspenseQuery } from '@tanstack/react-query'
+
+const postsQueryOptions = queryOptions({
+  queryKey: ['posts'],
+  queryFn: fetchPosts,
+  staleTime: 5 * 60_000,  // React Query controls staleness
+})
+
+export const Route = createFileRoute('/posts')({
+  loader: ({ context: { queryClient } }) => {
+    // Prime React Query cache
+    return queryClient.ensureQueryData(postsQueryOptions)
+  },
+  component: PostsComponent,
+})
+
+function PostsComponent() {
+  // React Query manages cache, refetch, mutations
+  const { data } = useSuspenseQuery(postsQueryOptions)
+  
+  return <PostList posts={data} />
+}
+```
+
+This pattern:
+- Router ensures data loaded before render
+- React Query handles cache, background refetch, mutations
+- Best of both worlds
+
+## Cache Persistence
+
+Persist cache across page reloads:
+
+```tsx
+import { createRouter } from '@tanstack/react-router'
+
+const router = createRouter({
+  routeTree,
+  
+  // Serialize cache on navigation
+  dehydrate: () => {
+    return {
+      timestamp: Date.now(),
+      // Add cache data here
+    }
+  },
+  
+  // Restore cache on load
+  hydrate: (dehydrated) => {
+    // Restore cache data
+    console.log('Hydrating from:', dehydrated.timestamp)
+  },
+})
+```
+
+Combine with `sessionStorage` or `localStorage` for persistence.
+
+## Cache Best Practices
+
+<AccordionGroup>
+  <Accordion title="Match staleTime to data volatility">
+    Frequently changing data (live scores) should have short staleTime. Rarely changing data (user profiles) can have long staleTime.
+  </Accordion>
+
+  <Accordion title="Use loaderDeps for cache granularity">
+    Include search params in `loaderDeps` to cache different filter/sort/page combinations separately.
+  </Accordion>
+
+  <Accordion title="Set reasonable gcTime">
+    Don't set gcTime too long - it wastes memory. 5-30 minutes is reasonable for most apps.
+  </Accordion>
+
+  <Accordion title="Invalidate related routes">
+    After mutations, invalidate all routes showing that data. Better to over-invalidate than show stale data.
+  </Accordion>
+
+  <Accordion title="Consider React Query for complex caching">
+    For advanced cache needs (background refetch, mutations, infinite queries), use React Query with Router.
+  </Accordion>
+</AccordionGroup>
+
+## Cache Debugging
+
+Inspect cache state:
+
+```tsx
+import { useRouter } from '@tanstack/react-router'
+
+function CacheDebugger() {
+  const router = useRouter()
+  
+  useEffect(() => {
+    // Log cache on navigation
+    const unsub = router.subscribe('onLoad', () => {
+      console.log('Cached matches:', router.state.cachedMatches)
+      console.log('Active matches:', router.state.matches)
+    })
+    return unsub
+  }, [router])
+  
+  return null
+}
+```
+
+Use TanStack Router DevTools for visual cache inspection.
+
+## Memory Management
+
+The router automatically manages memory:
+
+- **LRU eviction** - Oldest entries removed when cache is full
+- **GC cleanup** - Stale entries removed after gcTime
+- **Match cleanup** - Unused route matches removed on navigation
+
+No manual memory management required.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Loaders" icon="database" href="./loaders">
+    Understand how loaders populate the cache
+  </Card>
+  <Card title="Prefetching" icon="bolt" href="./prefetching">
+    Learn how prefetching interacts with cache
+  </Card>
+  <Card title="Routes" icon="route" href="./routes">
+    Configure cache options on routes
+  </Card>
+  <Card title="Search Params" icon="magnifying-glass" href="./search-params">
+    Use search params in cache keys
+  </Card>
+</CardGroup>

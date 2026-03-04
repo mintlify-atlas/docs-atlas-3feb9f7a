@@ -1,0 +1,367 @@
+---
+title: Server RPC API
+---
+
+# Server RPC
+
+Server-side Remote Procedure Call utilities for TanStack Start.
+
+## createServerRpc
+
+Create server-side RPC endpoints that can call other server functions.
+
+```tsx
+import { createServerRpc } from '@tanstack/react-start/server'
+
+const internalApi = createServerRpc()
+  .handler(async ({ context }) => {
+    // This runs only on the server
+    const data = await db.query()
+    return data
+  })
+```
+
+## Server-Only Functions
+
+Functions that can only be called server-side.
+
+```tsx
+import { createServerFn } from '@tanstack/start'
+
+// Server-only utility
+export const validateApiKey = async (apiKey: string) => {
+  'use server' // Mark as server-only
+  
+  const key = await db.apiKeys.findUnique({
+    where: { key: apiKey }
+  })
+  
+  return key?.isValid || false
+}
+
+// Use in server function
+const protectedAction = createServerFn({ method: 'POST' })
+  .handler(async ({ data }) => {
+    const isValid = await validateApiKey(data.apiKey)
+    
+    if (!isValid) {
+      throw new Error('Invalid API key')
+    }
+    
+    return { success: true }
+  })
+```
+
+## Server Context
+
+Access server-side context in server functions.
+
+```tsx
+import { getServerContext } from '@tanstack/start/server'
+
+const myServerFn = createServerFn({ method: 'GET' })
+  .handler(async () => {
+    const context = getServerContext()
+    
+    // Access request information
+    console.log('Request URL:', context.request.url)
+    console.log('Request headers:', context.request.headers)
+    
+    // Access server-side only data
+    const session = context.session
+    
+    return { data: 'server data' }
+  })
+```
+
+## Database Transactions
+
+Execute database operations within transactions.
+
+```tsx
+import { createServerFn } from '@tanstack/start'
+
+const createPostWithTags = createServerFn({ method: 'POST' })
+  .inputValidator(z.object({
+    title: z.string(),
+    content: z.string(),
+    tags: z.array(z.string())
+  }))
+  .handler(async ({ data }) => {
+    return await db.$transaction(async (tx) => {
+      // Create post
+      const post = await tx.posts.create({
+        data: {
+          title: data.title,
+          content: data.content
+        }
+      })
+      
+      // Create tags
+      await tx.tags.createMany({
+        data: data.tags.map(name => ({
+          name,
+          postId: post.id
+        }))
+      })
+      
+      // Return post with tags
+      return await tx.posts.findUnique({
+        where: { id: post.id },
+        include: { tags: true }
+      })
+    })
+  })
+```
+
+## Caching Server Results
+
+Cache server function results for improved performance.
+
+```tsx
+import { createServerFn } from '@tanstack/start'
+
+const cache = new Map()
+
+const getExpensiveData = createServerFn({ method: 'GET' })
+  .handler(async ({ data }) => {
+    const cacheKey = `data-${data.id}`
+    
+    // Check cache
+    if (cache.has(cacheKey)) {
+      return cache.get(cacheKey)
+    }
+    
+    // Compute expensive data
+    const result = await performExpensiveComputation(data.id)
+    
+    // Store in cache
+    cache.set(cacheKey, result)
+    
+    // Set expiration
+    setTimeout(() => cache.delete(cacheKey), 5 * 60 * 1000) // 5 minutes
+    
+    return result
+  })
+```
+
+## Server Function Composition
+
+Compose multiple server functions together.
+
+```tsx
+import { createServerFn } from '@tanstack/start'
+
+// Base server functions
+const getUser = createServerFn({ method: 'GET' })
+  .handler(async ({ data }) => {
+    return await db.users.findUnique({
+      where: { id: data.userId }
+    })
+  })
+
+const getUserPosts = createServerFn({ method: 'GET' })
+  .handler(async ({ data }) => {
+    return await db.posts.findMany({
+      where: { authorId: data.userId }
+    })
+  })
+
+// Composed function
+const getUserWithPosts = createServerFn({ method: 'GET' })
+  .handler(async ({ data }) => {
+    const [user, posts] = await Promise.all([
+      getUser({ data: { userId: data.userId } }),
+      getUserPosts({ data: { userId: data.userId } })
+    ])
+    
+    return { user, posts }
+  })
+```
+
+## Background Jobs
+
+Trigger background jobs from server functions.
+
+```tsx
+import { createServerFn } from '@tanstack/start'
+import { queue } from './job-queue'
+
+const sendEmail = createServerFn({ method: 'POST' })
+  .handler(async ({ data }) => {
+    // Add job to queue instead of blocking
+    await queue.add('send-email', {
+      to: data.email,
+      subject: data.subject,
+      body: data.body
+    })
+    
+    return { queued: true }
+  })
+
+// Process jobs in background
+queue.process('send-email', async (job) => {
+  await emailService.send({
+    to: job.data.to,
+    subject: job.data.subject,
+    html: job.data.body
+  })
+})
+```
+
+## Server-Side Redirects
+
+```tsx
+import { createServerFn, redirect } from '@tanstack/start'
+
+const requireAuth = createServerFn({ method: 'GET' })
+  .handler(async ({ context }) => {
+    const session = await getSession(context.request)
+    
+    if (!session) {
+      throw redirect({
+        to: '/login',
+        status: 302
+      })
+    }
+    
+    return session
+  })
+```
+
+## Server-Side Logging
+
+```tsx
+import { createServerFn } from '@tanstack/start'
+import { logger } from './logger'
+
+const createPost = createServerFn({ method: 'POST' })
+  .handler(async ({ data, context }) => {
+    logger.info('Creating post', {
+      userId: context.userId,
+      title: data.title
+    })
+    
+    try {
+      const post = await db.posts.create({ data })
+      
+      logger.info('Post created', {
+        postId: post.id
+      })
+      
+      return post
+    } catch (error) {
+      logger.error('Failed to create post', {
+        error: error.message,
+        userId: context.userId
+      })
+      throw error
+    }
+  })
+```
+
+## Rate Limiting
+
+```tsx
+import { createServerFn } from '@tanstack/start'
+import { rateLimit } from './rate-limiter'
+
+const sendMessage = createServerFn({ method: 'POST' })
+  .handler(async ({ data, context }) => {
+    // Check rate limit
+    const limited = await rateLimit.check(context.userId, {
+      max: 10, // 10 requests
+      window: 60 * 1000 // per minute
+    })
+    
+    if (limited) {
+      throw new Error('Rate limit exceeded')
+    }
+    
+    // Process message
+    return await sendMessageToQueue(data)
+  })
+```
+
+## Examples
+
+### Multi-Step Workflow
+
+```tsx
+import { createServerFn } from '@tanstack/start'
+
+const processOrder = createServerFn({ method: 'POST' })
+  .handler(async ({ data }) => {
+    // Step 1: Validate inventory
+    const available = await checkInventory(data.items)
+    if (!available) {
+      throw new Error('Items not available')
+    }
+    
+    // Step 2: Process payment
+    const payment = await processPayment({
+      amount: data.total,
+      method: data.paymentMethod
+    })
+    
+    if (!payment.success) {
+      throw new Error('Payment failed')
+    }
+    
+    // Step 3: Create order
+    const order = await db.orders.create({
+      data: {
+        items: data.items,
+        total: data.total,
+        paymentId: payment.id
+      }
+    })
+    
+    // Step 4: Update inventory
+    await updateInventory(data.items)
+    
+    // Step 5: Send confirmation
+    await sendOrderConfirmation(order)
+    
+    return order
+  })
+```
+
+### Server-Side Analytics
+
+```tsx
+import { createServerFn } from '@tanstack/start'
+import { analytics } from './analytics'
+
+const trackEvent = createServerFn({ method: 'POST' })
+  .handler(async ({ data, context }) => {
+    await analytics.track({
+      userId: context.userId,
+      event: data.event,
+      properties: data.properties,
+      timestamp: new Date(),
+      ip: context.request.headers.get('x-forwarded-for'),
+      userAgent: context.request.headers.get('user-agent')
+    })
+    
+    return { tracked: true }
+  })
+```
+
+### Server-Side Feature Flags
+
+```tsx
+import { createServerFn } from '@tanstack/start'
+import { featureFlags } from './feature-flags'
+
+const getFeatures = createServerFn({ method: 'GET' })
+  .handler(async ({ context }) => {
+    const flags = await featureFlags.getForUser(context.userId)
+    
+    return {
+      newDashboard: flags.includes('new-dashboard'),
+      betaFeatures: flags.includes('beta-features'),
+      aiAssistant: flags.includes('ai-assistant')
+    }
+  })
+```

@@ -1,0 +1,481 @@
+---
+title: React Route API
+---
+
+# React Route
+
+React-specific route APIs for creating type-safe routes with components, hooks, and data loading.
+
+## createRoute
+
+Create a standard route with React components.
+
+```tsx
+import { createRoute } from '@tanstack/react-router'
+import { rootRoute } from './root'
+
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts',
+  component: PostsComponent
+})
+
+function PostsComponent() {
+  return <div>Posts</div>
+}
+```
+
+## createRootRoute
+
+Create the root route for your application.
+
+```tsx
+import { createRootRoute, Outlet } from '@tanstack/react-router'
+
+export const rootRoute = createRootRoute({
+  component: () => (
+    <div>
+      <nav>
+        <Link to="/">Home</Link>
+        <Link to="/posts">Posts</Link>
+      </nav>
+      <hr />
+      <Outlet />
+    </div>
+  )
+})
+```
+
+## createRootRouteWithContext
+
+Create a root route with typed context.
+
+```tsx
+import { createRootRouteWithContext } from '@tanstack/react-router'
+import type { QueryClient } from '@tanstack/react-query'
+
+interface MyRouterContext {
+  queryClient: QueryClient
+  user: User | null
+}
+
+export const rootRoute = createRootRouteWithContext<MyRouterContext>()({
+  component: RootComponent
+})
+
+// Now all child routes have access to typed context
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts',
+  loader: async ({ context }) => {
+    // context.queryClient is fully typed
+    const posts = await context.queryClient.fetchQuery(...)
+    return { posts }
+  }
+})
+```
+
+## createFileRoute
+
+Create a route from a file-based routing setup.
+
+```tsx
+// src/routes/posts.$postId.tsx
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    const post = await fetchPost(params.postId)
+    return { post }
+  },
+  component: PostComponent
+})
+
+function PostComponent() {
+  const { post } = Route.useLoaderData()
+  return (
+    <article>
+      <h1>{post.title}</h1>
+      <p>{post.content}</p>
+    </article>
+  )
+}
+```
+
+## Route Options (React)
+
+All options from core Route API plus React-specific options.
+
+<ParamField path="component" type="() => JSX.Element">
+  React component to render for this route.
+  
+  ```tsx
+  component: () => <PostsList />
+  ```
+</ParamField>
+
+<ParamField path="errorComponent" type="({ error, reset }) => JSX.Element">
+  Component to render when an error occurs.
+  
+  ```tsx
+  errorComponent: ({ error, reset }) => (
+    <div>
+      <h1>Error: {error.message}</h1>
+      <button onClick={reset}>Try Again</button>
+    </div>
+  )
+  ```
+</ParamField>
+
+<ParamField path="pendingComponent" type="() => JSX.Element">
+  Component to render while loading.
+  
+  ```tsx
+  pendingComponent: () => <Spinner />
+  ```
+</ParamField>
+
+<ParamField path="notFoundComponent" type="() => JSX.Element">
+  Component to render when no child route matches.
+</ParamField>
+
+## Route Hooks
+
+Type-safe hooks for accessing route data.
+
+### Route.useLoaderData()
+
+Access loader data with full type safety.
+
+```tsx
+const postRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts/$postId',
+  loader: async ({ params }) => {
+    const post = await fetchPost(params.postId)
+    return { post }
+  },
+  component: () => {
+    const { post } = postRoute.useLoaderData()
+    //      ^? { post: Post }
+    return <h1>{post.title}</h1>
+  }
+})
+```
+
+### Route.useParams()
+
+Access route params with type safety.
+
+```tsx
+const postRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts/$postId',
+  component: () => {
+    const { postId } = postRoute.useParams()
+    //      ^? { postId: string }
+    return <div>Post ID: {postId}</div>
+  }
+})
+```
+
+### Route.useSearch()
+
+Access validated search params.
+
+```tsx
+import { z } from 'zod'
+
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts',
+  validateSearch: z.object({
+    page: z.number().default(1),
+    filter: z.string().optional()
+  }),
+  component: () => {
+    const { page, filter } = postsRoute.useSearch()
+    //      ^? { page: number, filter?: string }
+    return <div>Page {page}</div>
+  }
+})
+```
+
+### Route.useRouteContext()
+
+Access route context.
+
+```tsx
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts',
+  context: () => ({
+    title: 'Posts'
+  }),
+  component: () => {
+    const context = postsRoute.useRouteContext()
+    return <h1>{context.title}</h1>
+  }
+})
+```
+
+### Route.useNavigate()
+
+Get a navigate function scoped to the route.
+
+```tsx
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts',
+  component: () => {
+    const navigate = postsRoute.useNavigate()
+    
+    return (
+      <button onClick={() => navigate({ to: '/posts/$postId', params: { postId: '1' } })}>
+        View Post
+      </button>
+    )
+  }
+})
+```
+
+### Route.useLoaderDeps()
+
+Access loader dependencies.
+
+```tsx
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts',
+  loaderDeps: ({ search }) => ({
+    page: search.page
+  }),
+  component: () => {
+    const deps = postsRoute.useLoaderDeps()
+    return <div>Current page: {deps.page}</div>
+  }
+})
+```
+
+## Lazy Route Loading
+
+Split routes into separate chunks for code splitting.
+
+### createLazyRoute
+
+```tsx
+// posts.lazy.tsx
+import { createLazyRoute } from '@tanstack/react-router'
+
+export const Route = createLazyRoute('/posts')({
+  component: PostsComponent
+})
+
+function PostsComponent() {
+  return <div>Posts (lazy loaded)</div>
+}
+```
+
+### createLazyFileRoute
+
+```tsx
+// posts.$postId.lazy.tsx
+import { createLazyFileRoute } from '@tanstack/react-router'
+
+export const Route = createLazyFileRoute('/posts/$postId')({
+  component: PostComponent
+})
+
+function PostComponent() {
+  const { post } = Route.useLoaderData()
+  return <div>{post.title}</div>
+}
+```
+
+### Route Definition with Lazy Loading
+
+```tsx
+// posts.$postId.tsx (route definition)
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    const post = await fetchPost(params.postId)
+    return { post }
+  },
+  // Component will be loaded from lazy file
+})
+
+// posts.$postId.lazy.tsx (lazy component)
+import { createLazyFileRoute } from '@tanstack/react-router'
+
+export const Route = createLazyFileRoute('/posts/$postId')({
+  component: PostComponent
+})
+
+function PostComponent() {
+  const { post } = Route.useLoaderData()
+  return <article>{post.title}</article>
+}
+```
+
+## lazyRouteComponent
+
+Lazily load a single route component.
+
+```tsx
+import { lazyRouteComponent } from '@tanstack/react-router'
+
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts',
+  component: lazyRouteComponent(
+    () => import('./components/Posts'),
+    'Posts'
+  )
+})
+```
+
+## RouteApi
+
+Access route APIs without direct route reference.
+
+```tsx
+import { RouteApi } from '@tanstack/react-router'
+
+const routeApi = new RouteApi({ id: '/posts/$postId' })
+
+function PostComponent() {
+  const { post } = routeApi.useLoaderData()
+  const { postId } = routeApi.useParams()
+  
+  return <div>{post.title}</div>
+}
+```
+
+### getRouteApi
+
+Get a cached RouteApi instance.
+
+```tsx
+import { getRouteApi } from '@tanstack/react-router'
+
+const postRoute = getRouteApi('/posts/$postId')
+
+function PostComponent() {
+  const { post } = postRoute.useLoaderData()
+  return <div>{post.title}</div>
+}
+```
+
+## Example: Complete Route Setup
+
+```tsx
+// routes/__root.tsx
+import { createRootRoute, Outlet } from '@tanstack/react-router'
+
+export const Route = createRootRoute({
+  component: () => (
+    <div>
+      <nav>
+        <Link to="/">Home</Link>
+        <Link to="/posts">Posts</Link>
+      </nav>
+      <Outlet />
+    </div>
+  )
+})
+
+// routes/posts.$postId.tsx
+import { createFileRoute, notFound } from '@tanstack/react-router'
+import { z } from 'zod'
+
+export const Route = createFileRoute('/posts/$postId')({
+  // Validate params
+  params: {
+    parse: (params) => ({
+      postId: z.number().int().parse(Number(params.postId))
+    }),
+    stringify: (params) => ({
+      postId: String(params.postId)
+    })
+  },
+  
+  // Validate search
+  validateSearch: z.object({
+    tab: z.enum(['overview', 'comments']).default('overview')
+  }),
+  
+  // Load data
+  loader: async ({ params, abortController }) => {
+    const post = await fetchPost(params.postId, {
+      signal: abortController.signal
+    })
+    
+    if (!post) {
+      throw notFound()
+    }
+    
+    return { post }
+  },
+  
+  // Error component
+  errorComponent: ({ error, reset }) => (
+    <div>
+      <h1>Error loading post</h1>
+      <pre>{error.message}</pre>
+      <button onClick={reset}>Retry</button>
+    </div>
+  ),
+  
+  // Pending component
+  pendingComponent: () => (
+    <div className="animate-pulse">
+      Loading post...
+    </div>
+  )
+})
+
+// Lazy component in separate file
+// routes/posts.$postId.lazy.tsx
+import { createLazyFileRoute } from '@tanstack/react-router'
+
+export const Route = createLazyFileRoute('/posts/$postId')({
+  component: PostComponent
+})
+
+function PostComponent() {
+  const { post } = Route.useLoaderData()
+  const { tab } = Route.useSearch()
+  const navigate = Route.useNavigate()
+  
+  return (
+    <article>
+      <h1>{post.title}</h1>
+      
+      <div className="tabs">
+        <button 
+          onClick={() => navigate({ search: { tab: 'overview' } })}
+          className={tab === 'overview' ? 'active' : ''}
+        >
+          Overview
+        </button>
+        <button 
+          onClick={() => navigate({ search: { tab: 'comments' } })}
+          className={tab === 'comments' ? 'active' : ''}
+        >
+          Comments
+        </button>
+      </div>
+      
+      <div>
+        {tab === 'overview' ? (
+          <div>{post.content}</div>
+        ) : (
+          <Comments postId={post.id} />
+        )}
+      </div>
+    </article>
+  )
+}
+```

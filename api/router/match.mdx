@@ -1,0 +1,466 @@
+---
+title: Match API
+---
+
+# Match
+
+Route matches represent active route segments in the current navigation, containing their data, status, and metadata.
+
+## RouteMatch
+
+An individual route match in the current location.
+
+<ResponseField name="id" type="string">
+  Unique identifier for this match instance.
+</ResponseField>
+
+<ResponseField name="routeId" type="string">
+  The ID of the route that was matched.
+</ResponseField>
+
+<ResponseField name="fullPath" type="string">
+  The complete path for this route including parent paths.
+</ResponseField>
+
+<ResponseField name="pathname" type="string">
+  The actual pathname portion of the URL that matched this route.
+</ResponseField>
+
+<ResponseField name="params" type="Record<string, any>">
+  Path parameters extracted for this match.
+  
+  ```tsx
+  // For route /posts/$postId
+  match.params.postId // '123'
+  ```
+</ResponseField>
+
+<ResponseField name="status" type="'pending' | 'success' | 'error' | 'redirected' | 'notFound'">
+  Current status of the match.
+</ResponseField>
+
+<ResponseField name="isFetching" type="false | 'beforeLoad' | 'loader'">
+  Whether the match is currently fetching data, and which phase.
+</ResponseField>
+
+<ResponseField name="error" type="unknown">
+  Error thrown by the loader or beforeLoad function.
+</ResponseField>
+
+<ResponseField name="updatedAt" type="number">
+  Timestamp when the match was last updated.
+</ResponseField>
+
+<ResponseField name="loaderData" type="any">
+  Data returned from the route's loader function.
+</ResponseField>
+
+<ResponseField name="context" type="Record<string, any>">
+  Combined context from this route and all parent routes.
+</ResponseField>
+
+<ResponseField name="search" type="Record<string, any>">
+  Validated search parameters for this match.
+</ResponseField>
+
+<ResponseField name="index" type="number">
+  The index of this match in the matches array (0 is root).
+</ResponseField>
+
+## Match Component
+
+Render a specific route match component.
+
+```tsx
+import { Match } from '@tanstack/react-router'
+
+function CustomLayout() {
+  return (
+    <div>
+      <Sidebar />
+      <Match 
+        from="/posts" 
+        component={PostsLayout}
+      />
+    </div>
+  )
+}
+```
+
+### Match Props
+
+<ParamField path="from" type="string" required>
+  The route ID to match.
+</ParamField>
+
+<ParamField path="component" type="RouteComponent">
+  Component to render for the match.
+</ParamField>
+
+<ParamField path="errorComponent" type="ErrorRouteComponent">
+  Component to render if the match has an error.
+</ParamField>
+
+<ParamField path="pendingComponent" type="RouteComponent">
+  Component to render while the match is pending.
+</ParamField>
+
+## Outlet Component
+
+Render child route matches.
+
+```tsx
+import { Outlet } from '@tanstack/react-router'
+
+function Layout() {
+  return (
+    <div>
+      <Header />
+      <main>
+        <Outlet />
+      </main>
+      <Footer />
+    </div>
+  )
+}
+```
+
+## useMatches Hook
+
+Access all current route matches.
+
+```tsx
+import { useMatches } from '@tanstack/react-router'
+
+function Breadcrumbs() {
+  const matches = useMatches()
+  
+  return (
+    <nav>
+      {matches.map((match, i) => (
+        <span key={match.id}>
+          {i > 0 && ' > '}
+          {match.staticData?.title || match.routeId}
+        </span>
+      ))}
+    </nav>
+  )
+}
+```
+
+### useMatches Options
+
+<ParamField path="select" type="(matches: RouteMatch[]) => any">
+  Select specific data from the matches.
+  
+  ```tsx
+  const titles = useMatches({
+    select: (matches) => matches.map(m => m.staticData?.title)
+  })
+  ```
+</ParamField>
+
+<ParamField path="strict" type="boolean">
+  Throw error if used outside RouterProvider.
+  
+  **Default:** `true`
+</ParamField>
+
+## useParentMatches Hook
+
+Access matches for parent routes only.
+
+```tsx
+import { useParentMatches } from '@tanstack/react-router'
+
+function RouteInfo() {
+  const parentMatches = useParentMatches()
+  
+  return (
+    <div>
+      <h3>Parent Routes</h3>
+      <ul>
+        {parentMatches.map(match => (
+          <li key={match.id}>{match.routeId}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+```
+
+## useChildMatches Hook
+
+Access matches for child routes only.
+
+```tsx
+import { useChildMatches } from '@tanstack/react-router'
+
+function NestedNav() {
+  const childMatches = useChildMatches()
+  
+  if (childMatches.length === 0) {
+    return null
+  }
+  
+  return (
+    <nav>
+      {childMatches.map(match => (
+        <a key={match.id} href={match.pathname}>
+          {match.staticData?.title}
+        </a>
+      ))}
+    </nav>
+  )
+}
+```
+
+## useMatch Hook
+
+Access a specific route match with full type safety.
+
+```tsx
+import { useMatch } from '@tanstack/react-router'
+
+function PostDetails() {
+  const match = useMatch({
+    from: '/posts/$postId',
+    strict: true
+  })
+  
+  return (
+    <div>
+      <h1>Post ID: {match.params.postId}</h1>
+      <p>Status: {match.status}</p>
+    </div>
+  )
+}
+```
+
+### useMatch Options
+
+<ParamField path="from" type="string">
+  The route ID to match. Enables type safety.
+  
+  ```tsx
+  from: '/posts/$postId'
+  ```
+</ParamField>
+
+<ParamField path="strict" type="boolean">
+  Throw error if route is not matched.
+  
+  **Default:** `true`
+</ParamField>
+
+<ParamField path="select" type="(match: RouteMatch) => any">
+  Select specific data from the match.
+  
+  ```tsx
+  const postId = useMatch({
+    from: '/posts/$postId',
+    select: (match) => match.params.postId
+  })
+  ```
+</ParamField>
+
+## MatchRoute Component
+
+Conditionally render based on route match.
+
+```tsx
+import { MatchRoute } from '@tanstack/react-router'
+
+function Navigation() {
+  return (
+    <nav>
+      <Link to="/">Home</Link>
+      
+      <MatchRoute to="/admin" params>
+        {(match) => (
+          match ? <AdminNav /> : null
+        )}
+      </MatchRoute>
+    </nav>
+  )
+}
+```
+
+### MatchRoute Props
+
+<ParamField path="to" type="string" required>
+  The path to match against.
+</ParamField>
+
+<ParamField path="params" type="boolean | Record<string, any>">
+  Match with specific params or any params.
+</ParamField>
+
+<ParamField path="pending" type="boolean">
+  Match pending routes.
+</ParamField>
+
+<ParamField path="caseSensitive" type="boolean">
+  Use case-sensitive matching.
+</ParamField>
+
+<ParamField path="children" type="(match: RouteMatch | false) => ReactNode">
+  Render function receiving the match or false.
+</ParamField>
+
+## useMatchRoute Hook
+
+Programmatically check if a route matches.
+
+```tsx
+import { useMatchRoute } from '@tanstack/react-router'
+
+function Header() {
+  const matchRoute = useMatchRoute()
+  
+  const isPostsPage = matchRoute({ to: '/posts' })
+  const isPostDetail = matchRoute({ to: '/posts/$postId' })
+  
+  return (
+    <header>
+      {isPostsPage && <PostsHeader />}
+      {isPostDetail && <PostDetailHeader />}
+    </header>
+  )
+}
+```
+
+### useMatchRoute Options
+
+<ParamField path="to" type="string" required>
+  The path to match.
+</ParamField>
+
+<ParamField path="params" type="Record<string, any>">
+  Params that must match.
+  
+  ```tsx
+  matchRoute({
+    to: '/posts/$postId',
+    params: { postId: '123' }
+  })
+  ```
+</ParamField>
+
+<ParamField path="pending" type="boolean">
+  Check pending matches instead of current matches.
+</ParamField>
+
+<ParamField path="caseSensitive" type="boolean">
+  Use case-sensitive matching.
+</ParamField>
+
+<ParamField path="includeSearch" type="boolean">
+  Include search params in matching.
+</ParamField>
+
+<ParamField path="fuzzy" type="boolean">
+  Allow fuzzy matching (match child routes).
+  
+  **Default:** `true`
+</ParamField>
+
+## Examples
+
+### Breadcrumb Navigation
+
+```tsx
+import { useMatches } from '@tanstack/react-router'
+
+function Breadcrumbs() {
+  const matches = useMatches()
+  
+  return (
+    <nav aria-label="breadcrumb">
+      <ol className="breadcrumb">
+        {matches.map((match, index) => (
+          <li key={match.id}>
+            {index < matches.length - 1 ? (
+              <Link to={match.pathname}>
+                {match.staticData?.title || match.routeId}
+              </Link>
+            ) : (
+              <span>{match.staticData?.title || match.routeId}</span>
+            )}
+          </li>
+        ))}
+      </ol>
+    </nav>
+  )
+}
+```
+
+### Conditional Rendering
+
+```tsx
+import { useMatchRoute } from '@tanstack/react-router'
+
+function Sidebar() {
+  const matchRoute = useMatchRoute()
+  
+  const showUserMenu = matchRoute({ 
+    to: '/dashboard', 
+    fuzzy: true 
+  })
+  
+  const showAdminMenu = matchRoute({ 
+    to: '/admin',
+    fuzzy: true
+  })
+  
+  return (
+    <aside>
+      {showUserMenu && <UserMenu />}
+      {showAdminMenu && <AdminMenu />}
+    </aside>
+  )
+}
+```
+
+### Match Status Handling
+
+```tsx
+import { useMatch } from '@tanstack/react-router'
+
+function PostView() {
+  const match = useMatch({ from: '/posts/$postId' })
+  
+  if (match.status === 'pending') {
+    return <LoadingSpinner />
+  }
+  
+  if (match.status === 'error') {
+    return <ErrorMessage error={match.error} />
+  }
+  
+  const post = match.loaderData
+  
+  return <Post post={post} />
+}
+```
+
+### Route Context Access
+
+```tsx
+import { useMatches } from '@tanstack/react-router'
+
+function ThemeToggle() {
+  // Get theme from any parent route's context
+  const theme = useMatches({
+    select: (matches) => {
+      // Find first match with theme in context
+      const matchWithTheme = matches.find(
+        m => m.context.theme
+      )
+      return matchWithTheme?.context.theme || 'light'
+    }
+  })
+  
+  return <button>Current theme: {theme}</button>
+}
+```

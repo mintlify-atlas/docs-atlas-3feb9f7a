@@ -1,0 +1,543 @@
+---
+title: Navigation
+---
+
+# Navigation
+
+Navigation in TanStack Router is fully type-safe and provides multiple ways to move between routes - from imperative navigation with hooks to declarative navigation with components.
+
+## Why Navigation Matters
+
+Navigation is how users move through your application. TanStack Router provides:
+
+- **Type-safe navigation** - Compile-time checking of paths and parameters
+- **Multiple navigation methods** - Programmatic, declarative, and browser-based
+- **Relative navigation** - Navigate relative to the current route
+- **Search param management** - Update search params without full navigation
+- **Navigation lifecycle** - Hooks for before/after navigation events
+
+## Link Component
+
+The `Link` component is the primary way to create navigation links.
+
+### Basic Links
+
+```tsx
+import { Link } from '@tanstack/react-router'
+
+function Navigation() {
+  return (
+    <nav>
+      <Link to="/">Home</Link>
+      <Link to="/about">About</Link>
+      <Link to="/posts">Posts</Link>
+    </nav>
+  )
+}
+```
+
+### Links with Parameters
+
+```tsx
+<Link
+  to="/posts/$postId"
+  params={{ postId: '123' }}
+>
+  View Post 123
+</Link>
+```
+
+All parameters are type-checked based on the route definition.
+
+### Links with Search Parameters
+
+```tsx
+<Link
+  to="/posts"
+  search={{ page: 2, filter: 'react' }}
+>
+  Page 2
+</Link>
+```
+
+Search parameters are typed based on the route's `validateSearch` schema.
+
+### Updating Search Params
+
+Update search params while staying on the current route:
+
+```tsx
+<Link
+  to="."
+  search={(prev) => ({ ...prev, page: prev.page + 1 })}
+>
+  Next Page
+</Link>
+```
+
+The `search` prop accepts a function that receives previous search params.
+
+### Hash Navigation
+
+Navigate to page anchors:
+
+```tsx
+<Link
+  to="/posts/$postId"
+  params={{ postId: '1' }}
+  hash="comments"
+>
+  Jump to Comments
+</Link>
+```
+
+### State Passing
+
+Pass state through navigation:
+
+```tsx
+<Link
+  to="/posts/$postId"
+  params={{ postId: '1' }}
+  state={{ fromPage: 'search' }}
+>
+  View Post
+</Link>
+```
+
+Access state in the destination route via `useLocation().state`.
+
+## Relative Navigation
+
+Navigate relative to the current route path.
+
+### Relative Link Paths
+
+```tsx
+// From /posts/123
+<Link to="..">All Posts</Link>        {/* Goes to /posts */}
+<Link to="../new">New Post</Link>     {/* Goes to /posts/new */}
+<Link to=".">Current Post</Link>     {/* Stays at /posts/123 */}
+<Link to="./edit">Edit Post</Link>   {/* Goes to /posts/123/edit */}
+```
+
+### From Parameter
+
+Specify the starting route for navigation:
+
+```tsx
+<Link
+  from="/posts/$postId"
+  to=".."
+>
+  Back to Posts
+</Link>
+```
+
+This is required when the link is not rendered within the route it navigates from.
+
+## Active Link Styling
+
+Style links based on active state:
+
+### Using activeProps
+
+```tsx
+<Link
+  to="/posts"
+  activeProps={{
+    className: 'font-bold text-blue-600',
+    'aria-current': 'page',
+  }}
+>
+  Posts
+</Link>
+```
+
+Props are applied when the link's route is active.
+
+### Using activeOptions
+
+```tsx
+<Link
+  to="/posts"
+  activeOptions={{
+    exact: true,           // Only match exact path
+    includeHash: false,    // Ignore hash in comparison
+    includeSearch: false,  // Ignore search params
+  }}
+  activeProps={{
+    className: 'active',
+  }}
+>
+  Posts
+</Link>
+```
+
+### Custom Active Styling
+
+```tsx
+<Link
+  to="/posts"
+  className={({ isActive }) => 
+    isActive ? 'font-bold' : 'font-normal'
+  }
+  style={({ isActive }) => ({
+    color: isActive ? 'blue' : 'black',
+  })}
+>
+  Posts
+</Link>
+```
+
+Render props receive `isActive` and `isTransitioning` booleans.
+
+## Programmatic Navigation
+
+Navigate imperatively using the `useNavigate` hook.
+
+### Basic Navigation
+
+```tsx
+import { useNavigate } from '@tanstack/react-router'
+
+function MyComponent() {
+  const navigate = useNavigate()
+  
+  const handleClick = () => {
+    navigate({ to: '/posts' })
+  }
+  
+  return <button onClick={handleClick}>View Posts</button>
+}
+```
+
+### Navigation with Parameters
+
+```tsx
+const navigate = useNavigate()
+
+navigate({
+  to: '/posts/$postId',
+  params: { postId: '123' },
+  search: { page: 1 },
+  hash: 'comments',
+})
+```
+
+The `useNavigate` hook returns a function defined in `packages/router-core/src/useNavigate.ts:4-13`:
+
+```typescript
+export type UseNavigateResult<TDefaultFrom extends string> = <
+  TRouter extends RegisteredRouter,
+  TTo extends string | undefined,
+  TFrom extends string = TDefaultFrom,
+>(
+  options: NavigateOptions<TRouter, TFrom, TTo>,
+) => Promise<void>
+```
+
+### Replace Navigation
+
+Replace history instead of pushing:
+
+```tsx
+navigate({
+  to: '/login',
+  replace: true,  // Replaces current history entry
+})
+```
+
+Useful for redirects after login or form submission.
+
+### Relative Navigation
+
+```tsx
+const navigate = useNavigate({ from: '/posts/$postId' })
+
+// Navigate relative to /posts/$postId
+navigate({ to: '..' })          // Goes to /posts
+navigate({ to: '../new' })      // Goes to /posts/new
+```
+
+## Router Methods
+
+The router instance provides navigation methods:
+
+```tsx
+import { useRouter } from '@tanstack/react-router'
+
+function MyComponent() {
+  const router = useRouter()
+  
+  const handleNavigate = () => {
+    router.navigate({
+      to: '/posts',
+      search: { page: 1 },
+    })
+  }
+  
+  return <button onClick={handleNavigate}>Navigate</button>
+}
+```
+
+### Navigation History
+
+```tsx
+const router = useRouter()
+
+// Go back
+router.history.back()
+
+// Go forward
+router.history.forward()
+
+// Go to specific position
+router.history.go(-2) // Back 2 pages
+```
+
+## Navigation Options
+
+Fine-tune navigation behavior with options.
+
+### View Transitions
+
+Use the View Transitions API:
+
+```tsx
+<Link
+  to="/posts"
+  viewTransition
+>
+  Posts
+</Link>
+
+// Or programmatically
+navigate({
+  to: '/posts',
+  viewTransition: true,
+})
+```
+
+Browser support required. Gracefully degrades if not available.
+
+### Reset Scroll
+
+Control scroll behavior:
+
+```tsx
+navigate({
+  to: '/posts',
+  resetScroll: true,  // Scroll to top
+})
+
+// Or preserve scroll
+navigate({
+  to: '/posts',
+  resetScroll: false,
+})
+```
+
+### Hash Scroll Behavior
+
+Customize scroll-to-hash:
+
+```tsx
+<Link
+  to="/posts/$postId"
+  params={{ postId: '1' }}
+  hash="comments"
+  hashScrollIntoView={{
+    behavior: 'smooth',
+    block: 'start',
+  }}
+>
+  Jump to Comments
+</Link>
+```
+
+Accepts standard `ScrollIntoViewOptions`.
+
+## Navigation Events
+
+React to navigation changes:
+
+```tsx
+import { useRouter } from '@tanstack/react-router'
+import { useEffect } from 'react'
+
+function useNavigationTracking() {
+  const router = useRouter()
+  
+  useEffect(() => {
+    // Subscribe to navigation events
+    const unsub = router.subscribe('onLoad', (state) => {
+      console.log('Navigated to:', state.location.pathname)
+      analytics.track('pageview', state.location.pathname)
+    })
+    
+    return unsub
+  }, [router])
+}
+```
+
+## Redirects
+
+Perform server-side or client-side redirects.
+
+### Throwing Redirects
+
+```tsx
+import { redirect } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/_auth')({
+  beforeLoad: ({ context }) => {
+    if (!context.auth.isAuthenticated) {
+      throw redirect({
+        to: '/login',
+        search: {
+          redirect: location.href,
+        },
+      })
+    }
+  },
+})
+```
+
+Redirects thrown in `beforeLoad` or `loader` cancel the navigation.
+
+### Route-Based Redirects
+
+```tsx
+export const Route = createFileRoute('/old-path')({
+  beforeLoad: () => {
+    throw redirect({ to: '/new-path' })
+  },
+})
+```
+
+### Relative Redirects
+
+Use the route's `redirect` helper:
+
+```tsx
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    const post = await fetchPost(params.postId)
+    if (!post) {
+      // Redirect relative to current route
+      throw Route.redirect({ to: '..' })
+    }
+    return { post }
+  },
+})
+```
+
+## External Links
+
+For external URLs, use standard anchor tags:
+
+```tsx
+<a href="https://tanstack.com" target="_blank" rel="noopener noreferrer">
+  TanStack
+</a>
+```
+
+The `Link` component is for internal routing only.
+
+## Preloading
+
+Preload routes before navigation:
+
+```tsx
+import { useRouter } from '@tanstack/react-router'
+
+function MyComponent() {
+  const router = useRouter()
+  
+  const handleMouseEnter = () => {
+    router.preloadRoute({
+      to: '/posts/$postId',
+      params: { postId: '123' },
+    })
+  }
+  
+  return (
+    <Link
+      to="/posts/$postId"
+      params={{ postId: '123' }}
+      onMouseEnter={handleMouseEnter}
+    >
+      Hover to Preload
+    </Link>
+  )
+}
+```
+
+Or use the built-in preload options:
+
+```tsx
+<Link
+  to="/posts/$postId"
+  params={{ postId: '123' }}
+  preload="intent"  // Preload on hover/touch
+>
+  Smart Preload
+</Link>
+```
+
+See the [Prefetching guide](./prefetching) for more details.
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Prefer Link components over navigate()">
+    Use `<Link>` for user-initiated navigation. It provides better accessibility, supports right-click/cmd-click, and shows URL previews.
+  </Accordion>
+
+  <Accordion title="Use replace for redirects">
+    When redirecting after an action (login, form submit), use `replace: true` to avoid polluting the browser history.
+  </Accordion>
+
+  <Accordion title="Leverage relative navigation">
+    Relative paths make routes more portable and resilient to URL structure changes.
+  </Accordion>
+
+  <Accordion title="Type your from parameter">
+    Always specify `from` when using relative navigation outside the route component. This ensures type safety.
+  </Accordion>
+
+  <Accordion title="Use hash navigation sparingly">
+    Hash navigation is useful for jump links, but avoid using it as a primary navigation mechanism.
+  </Accordion>
+</AccordionGroup>
+
+## Navigation Flow
+
+Understanding the navigation lifecycle:
+
+1. **Navigation initiated** - Via `Link`, `navigate()`, or browser action
+2. **Route matching** - Router finds matching route(s)
+3. **beforeLoad runs** - Authentication, redirects, context setup
+4. **Loader runs** - Data fetching (if needed)
+5. **Navigation completes** - New route renders
+6. **onLoad fires** - Post-navigation side effects
+
+Errors or redirects at any step cancel subsequent steps.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Loaders" icon="database" href="./loaders">
+    Learn about loading data during navigation
+  </Card>
+  <Card title="Search Params" icon="magnifying-glass" href="./search-params">
+    Master search parameter navigation patterns
+  </Card>
+  <Card title="Prefetching" icon="bolt" href="./prefetching">
+    Optimize performance with route prefetching
+  </Card>
+  <Card title="Type Safety" icon="shield" href="./type-safety">
+    Explore type-safe navigation patterns
+  </Card>
+</CardGroup>

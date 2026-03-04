@@ -1,0 +1,475 @@
+---
+title: Prefetching
+---
+
+# Prefetching
+
+Prefetching loads route code and data before users navigate to a route. This creates instant-feeling navigation by eliminating loading states and code splitting delays.
+
+## Why Prefetching Matters
+
+Prefetching dramatically improves perceived performance:
+
+- **Instant navigation** - Routes load instantly when prefetched
+- **No loading states** - Users see content immediately
+- **Smart resource usage** - Only prefetch what users are likely to need
+- **Code splitting friendly** - Load code chunks before navigation
+
+The result is a snappier, more responsive application.
+
+## Prefetch Strategies
+
+TanStack Router supports multiple prefetching strategies.
+
+### Intent-Based Prefetching
+
+Prefetch when users show intent to navigate:
+
+```tsx
+import { Link } from '@tanstack/react-router'
+
+<Link
+  to="/posts/$postId"
+  params={{ postId: '123' }}
+  preload="intent" // Prefetch on hover or touch
+>
+  View Post
+</Link>
+```
+
+Prefetching starts on:
+- **Mouse hover** - Desktop users
+- **Touch start** - Mobile users
+- **Focus** - Keyboard navigation
+
+This balances performance with bandwidth usage.
+
+### Viewport Prefetching
+
+Prefetch when links enter the viewport:
+
+```tsx
+<Link
+  to="/posts/$postId"
+  params={{ postId: '123' }}
+  preload="viewport" // Prefetch when visible
+>
+  View Post
+</Link>
+```
+
+Uses Intersection Observer to detect visibility. Great for content-heavy pages.
+
+### Render Prefetching
+
+Prefetch immediately when the link renders:
+
+```tsx
+<Link
+  to="/posts/$postId"
+  params={{ postId: '123' }}
+  preload="render" // Prefetch immediately
+>
+  View Post
+</Link>
+```
+
+Use sparingly - can waste bandwidth on routes users never visit.
+
+### Manual Prefetching
+
+Programmatically control prefetching:
+
+```tsx
+import { useRouter } from '@tanstack/react-router'
+
+function MyComponent() {
+  const router = useRouter()
+  
+  const handleMouseEnter = () => {
+    router.preloadRoute({
+      to: '/posts/$postId',
+      params: { postId: '123' },
+    })
+  }
+  
+  return (
+    <div onMouseEnter={handleMouseEnter}>
+      Hover to prefetch
+    </div>
+  )
+}
+```
+
+Full control over when and what to prefetch.
+
+## Global Prefetch Defaults
+
+Set default prefetch behavior for all routes:
+
+```tsx
+import { createRouter } from '@tanstack/react-router'
+
+const router = createRouter({
+  routeTree,
+  defaultPreload: 'intent', // Default for all routes
+  defaultPreloadDelay: 50,   // Wait 50ms before prefetching
+})
+```
+
+From `packages/router-core/src/router.ts:189-207`, available options:
+
+```typescript
+interface RouterOptions {
+  defaultPreload?: false | 'intent' | 'viewport' | 'render'
+  defaultPreloadDelay?: number // Default: 50ms
+  defaultPreloadIntentProximity?: number // Default: 0
+}
+```
+
+### Preload Delay
+
+Wait before prefetching to avoid unnecessary requests:
+
+```tsx
+const router = createRouter({
+  routeTree,
+  defaultPreload: 'intent',
+  defaultPreloadDelay: 100, // Wait 100ms
+})
+```
+
+If user moves mouse away within delay, prefetch is cancelled. This prevents accidental prefetches.
+
+## Per-Route Prefetch Configuration
+
+Override defaults for specific routes:
+
+```tsx
+export const Route = createFileRoute('/posts/$postId')({
+  // Disable prefetching for this route
+  preload: false,
+  
+  loader: async ({ params }) => {
+    return { post: await fetchPost(params.postId) }
+  },
+})
+```
+
+### Route Preload Options
+
+```tsx
+export const Route = createFileRoute('/posts')({
+  preload: true,            // Enable prefetching
+  preloadStaleTime: 10_000, // Consider fresh for 10s
+  preloadGcTime: 60_000,    // Cache for 60s
+})
+```
+
+These control how long prefetched data remains fresh and cached.
+
+## What Gets Prefetched?
+
+Prefetching loads multiple aspects of a route:
+
+### Code Splitting
+
+Load route code chunks:
+
+```tsx
+// Route definition
+export const Route = createFileRoute('/posts/$postId')({
+  component: () => <div>Loading...</div>,
+}).lazy(() => import('./posts.$postId.lazy'))
+
+// Lazy component
+export const Route = createLazyFileRoute('/posts/$postId')({
+  component: PostComponent, // This gets prefetched
+})
+```
+
+Prefetching loads the lazy chunk before navigation.
+
+### Loader Data
+
+Execute route loaders:
+
+```tsx
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    // This runs during prefetch
+    return { post: await fetchPost(params.postId) }
+  },
+})
+```
+
+Loader runs with `preload: true` in context.
+
+### Component Assets
+
+Load components, error boundaries, and pending components:
+
+```tsx
+export const Route = createFileRoute('/posts/$postId')({
+  component: PostComponent,
+  errorComponent: ErrorComponent,
+  pendingComponent: PendingComponent,
+})
+```
+
+All component code is prefetched.
+
+## Prefetch Cache Control
+
+Control how long prefetched data stays fresh.
+
+### Stale Time
+
+How long data is considered fresh:
+
+```tsx
+export const Route = createFileRoute('/posts')({
+  // Prefetched data fresh for 30 seconds
+  preloadStaleTime: 30_000,
+  
+  loader: async () => {
+    return { posts: await fetchPosts() }
+  },
+})
+```
+
+If navigating within stale time, cached data is used immediately.
+
+### Garbage Collection Time
+
+How long to keep prefetched data in cache:
+
+```tsx
+export const Route = createFileRoute('/posts')({
+  // Keep prefetched data for 5 minutes
+  preloadGcTime: 5 * 60 * 1000,
+})
+```
+
+From `packages/router-core/src/router.ts:239-255`, the defaults are:
+- `defaultPreloadStaleTime`: 30 seconds
+- `defaultPreloadGcTime`: 30 minutes
+
+### Stale vs GC Time
+
+```
+Prefetch occurs
+    |
+    v
+[Fresh: 0-30s] ← Uses cached data immediately
+    |
+    v  
+[Stale: 30s-30min] ← Shows cached data, refetches in background
+    |
+    v
+[GC: after 30min] ← Data removed from cache
+```
+
+## Detecting Prefetch in Loaders
+
+Conditionally run logic based on prefetch:
+
+```tsx
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params, preload, context }) => {
+    if (preload) {
+      // Prefetch mode - maybe skip expensive operations
+      return quickFetchPost(params.postId)
+    }
+    
+    // Normal navigation - full data
+    return {
+      post: await fetchPost(params.postId),
+      comments: await fetchComments(params.postId),
+      related: await fetchRelated(params.postId),
+    }
+  },
+})
+```
+
+The `preload` flag indicates prefetch vs navigation.
+
+## Prefetching with Search Params
+
+Prefetch specific search param combinations:
+
+```tsx
+import { Link } from '@tanstack/react-router'
+
+<Link
+  to="/posts"
+  search={{ page: 2, filter: 'react' }}
+  preload="intent"
+>
+  Next Page
+</Link>
+```
+
+Prefetches the route with exact search params.
+
+### Preload Dependencies
+
+Search params in `loaderDeps` are included:
+
+```tsx
+export const Route = createFileRoute('/posts')({
+  validateSearch: z.object({
+    page: z.number().default(1),
+  }),
+  
+  loaderDeps: ({ search }) => ({ page: search.page }),
+  
+  loader: ({ deps }) => {
+    return fetchPosts(deps.page)
+  },
+})
+
+// This prefetches with page=2
+<Link
+  to="/posts"
+  search={{ page: 2 }}
+  preload="intent"
+/>
+```
+
+## Prefetch Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use intent-based as default">
+    Intent-based prefetching (`preload="intent"`) provides the best balance between performance and bandwidth usage.
+  </Accordion>
+
+  <Accordion title="Add preload delay">
+    Set `defaultPreloadDelay` to 50-100ms to avoid prefetching when users briefly hover over links.
+  </Accordion>
+
+  <Accordion title="Disable for expensive routes">
+    Don't prefetch routes with heavy loaders or large bundles. Let users explicitly navigate to them.
+  </Accordion>
+
+  <Accordion title="Consider mobile data usage">
+    Be conservative with viewport and render prefetching on mobile networks. Intent-based is safer.
+  </Accordion>
+
+  <Accordion title="Tune cache times appropriately">
+    Set `preloadStaleTime` based on data freshness needs. News sites want short times, dashboards can use longer.
+  </Accordion>
+</AccordionGroup>
+
+## Advanced Patterns
+
+### Conditional Prefetching
+
+```tsx
+import { Link } from '@tanstack/react-router'
+
+function PostLink({ post, isPriority }: Props) {
+  return (
+    <Link
+      to="/posts/$postId"
+      params={{ postId: post.id }}
+      preload={isPriority ? 'render' : 'intent'}
+    >
+      {post.title}
+    </Link>
+  )
+}
+```
+
+Priority posts prefetch immediately, others on hover.
+
+### Prefetch on Route Enter
+
+```tsx
+export const Route = createFileRoute('/posts')({
+  component: PostsComponent,
+})
+
+function PostsComponent() {
+  const router = useRouter()
+  const posts = Route.useLoaderData()
+  
+  useEffect(() => {
+    // Prefetch first 3 posts when list loads
+    posts.slice(0, 3).forEach(post => {
+      router.preloadRoute({
+        to: '/posts/$postId',
+        params: { postId: post.id },
+      })
+    })
+  }, [posts])
+  
+  return <PostList posts={posts} />
+}
+```
+
+### Batch Prefetching
+
+```tsx
+function usePreloadVisible(postIds: string[]) {
+  const router = useRouter()
+  
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      // Batch prefetch after 1 second of viewing
+      postIds.forEach(id => {
+        router.preloadRoute({
+          to: '/posts/$postId',
+          params: { postId: id },
+        })
+      })
+    }, 1000)
+    
+    return () => clearTimeout(timer)
+  }, [postIds])
+}
+```
+
+## Prefetch Metrics
+
+Track prefetch effectiveness:
+
+```tsx
+import { useRouter } from '@tanstack/react-router'
+
+function usePrefetchMetrics() {
+  const router = useRouter()
+  
+  useEffect(() => {
+    const unsub = router.subscribe('onLoad', (state) => {
+      // Check if route was prefetched
+      const wasPrefetched = state.matches.every(match => 
+        match.status === 'success' && match.isFetching === false
+      )
+      
+      if (wasPrefetched) {
+        console.log('Instant navigation - route was prefetched!')
+      }
+    })
+    
+    return unsub
+  }, [router])
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Caching" icon="server" href="./caching">
+    Learn about cache management for prefetched data
+  </Card>
+  <Card title="Loaders" icon="database" href="./loaders">
+    Understand how loaders work with prefetching
+  </Card>
+  <Card title="Navigation" icon="compass" href="./navigation">
+    Explore navigation patterns with prefetching
+  </Card>
+  <Card title="Routes" icon="route" href="./routes">
+    Configure route-level prefetch options
+  </Card>
+</CardGroup>

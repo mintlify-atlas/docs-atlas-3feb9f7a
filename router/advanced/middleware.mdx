@@ -1,0 +1,372 @@
+---
+title: Search Middleware
+description: Learn how to use search middleware to retain, strip, and transform search parameters across navigations
+---
+
+Search middleware allows you to intercept and transform search parameters during navigation. This is useful for retaining certain params across routes, removing default values, or applying custom transformations.
+
+## Overview
+
+Search middleware functions run during navigation to modify search parameters before they're applied to the URL. They receive the current and next search params and can return modified values.
+
+## Middleware Signature
+
+A search middleware is a function with the following signature:
+
+```tsx
+type SearchMiddleware<TSearchSchema> = (
+  ctx: SearchMiddlewareContext<TSearchSchema>,
+) => TSearchSchema
+
+type SearchMiddlewareContext<TSearchSchema> = {
+  search: TSearchSchema  // Current search params
+  next: (newSearch: TSearchSchema) => TSearchSchema  // Next search params
+}
+```
+
+## Built-in Middleware
+
+TanStack Router provides two built-in middleware functions:
+
+### retainSearchParams
+
+Retain specific search params across navigations.
+
+```tsx
+import { createFileRoute, retainSearchParams } from '@tanstack/react-router'
+import { z } from 'zod'
+
+export const Route = createFileRoute('/dashboard/users')({n  validateSearch: z.object({
+    usersView: z.object({
+      sortBy: z.enum(['name', 'id', 'email']).optional(),
+      filterBy: z.string().optional(),
+    }).optional(),
+  }),
+  search: {
+    middlewares: [retainSearchParams(['usersView'])],
+  },
+})
+```
+
+With this middleware, the `usersView` param will be retained when navigating to child routes or within this route tree.
+
+#### Retain All Params
+
+Pass `true` to retain all search params:
+
+```tsx
+search: {
+  middlewares: [retainSearchParams(true)],
+}
+```
+
+#### Retain Multiple Params
+
+```tsx
+search: {
+  middlewares: [retainSearchParams(['view', 'sort', 'filter'])],
+}
+```
+
+### stripSearchParams
+
+Remove optional or default-valued search params to keep URLs clean.
+
+```tsx
+import { createFileRoute, stripSearchParams } from '@tanstack/react-router'
+import { z } from 'zod'
+
+export const Route = createFileRoute('/products')({n  validateSearch: z.object({
+    page: z.number().optional(),
+    sort: z.enum(['name', 'price']).optional(),
+  }),
+  search: {
+    middlewares: [
+      stripSearchParams({
+        page: 1,      // Remove page=1 from URL (it's the default)
+        sort: 'name', // Remove sort=name from URL (it's the default)
+      }),
+    ],
+  },
+})
+```
+
+#### Strip All Optional Params
+
+If there are no required params, pass `true` to strip all:
+
+```tsx
+search: {
+  middlewares: [stripSearchParams(true)],
+}
+```
+
+#### Strip Specific Optional Params
+
+Pass an array to always remove specific optional keys:
+
+```tsx
+search: {
+  middlewares: [stripSearchParams(['debug', 'preview'])],
+}
+```
+
+## Combining Middleware
+
+You can chain multiple middleware functions:
+
+```tsx
+export const Route = createFileRoute('/products')({n  validateSearch: z.object({
+    category: z.string().optional(),
+    page: z.number().optional(),
+    sort: z.string().optional(),
+  }),
+  search: {
+    middlewares: [
+      retainSearchParams(['category']),  // Keep category across navigations
+      stripSearchParams({ page: 1 }),    // Remove default page value
+    ],
+  },
+})
+```
+
+Middleware executes in array order: each middleware receives the output of the previous one.
+
+## Custom Middleware
+
+Create custom middleware for advanced transformations:
+
+```tsx
+import type { SearchMiddleware } from '@tanstack/react-router'
+
+type MySearchSchema = {
+  filter: string
+  includeArchived?: boolean
+}
+
+const normalizeFilter: SearchMiddleware<MySearchSchema> = ({ search, next }) => {
+  const result = next(search)
+  return {
+    ...result,
+    filter: result.filter?.toLowerCase().trim() ?? '',
+  }
+}
+
+export const Route = createFileRoute('/items')({n  validateSearch: z.object({
+    filter: z.string(),
+    includeArchived: z.boolean().optional(),
+  }),
+  search: {
+    middlewares: [normalizeFilter],
+  },
+})
+```
+
+## Middleware Execution
+
+Middleware runs during navigation, after validation but before the new search params are applied:
+
+1. User initiates navigation with new search params
+2. Router validates search params using `validateSearch`
+3. Router runs search middleware in order
+4. Router applies final search params to URL
+5. Components re-render with new params
+
+## Use Cases
+
+### Persistent Filters
+
+Keep filter state when navigating to detail views:
+
+```tsx
+// List route
+export const Route = createFileRoute('/products')({n  validateSearch: z.object({
+    category: z.string().optional(),
+    priceRange: z.string().optional(),
+  }),
+  search: {
+    middlewares: [retainSearchParams(['category', 'priceRange'])],
+  },
+})
+
+// Detail route inherits the middleware
+export const DetailRoute = createFileRoute('/products/$id')({n  // category and priceRange are retained from parent
+})
+```
+
+### Clean URLs
+
+Remove default values to keep URLs minimal:
+
+```tsx
+export const Route = createFileRoute('/search')({n  validateSearch: z.object({
+    query: z.string().optional(),
+    page: z.number().optional(),
+    perPage: z.number().optional(),
+  }),
+  search: {
+    middlewares: [
+      stripSearchParams({
+        page: 1,
+        perPage: 20,
+      }),
+    ],
+  },
+})
+
+// URL: /search?query=test&page=1&perPage=20
+// Becomes: /search?query=test
+```
+
+### Multi-Step Forms
+
+Retain form state across steps:
+
+```tsx
+export const Route = createFileRoute('/checkout')({n  validateSearch: z.object({
+    formData: z.object({
+      email: z.string().optional(),
+      address: z.string().optional(),
+    }).optional(),
+  }),
+  search: {
+    middlewares: [retainSearchParams(['formData'])],
+  },
+})
+```
+
+### Tab State Persistence
+
+Keep tab selection when navigating:
+
+```tsx
+export const Route = createFileRoute('/dashboard')({n  validateSearch: z.object({
+    tab: z.enum(['overview', 'analytics', 'settings']).optional(),
+  }),
+  search: {
+    middlewares: [
+      retainSearchParams(['tab']),
+      stripSearchParams({ tab: 'overview' }), // Remove default tab
+    ],
+  },
+})
+```
+
+## Middleware Context
+
+The middleware context provides:
+
+- `search`: Current search params (from the current route)
+- `next`: Function that returns the next search params (after navigation)
+
+```tsx
+const loggerMiddleware: SearchMiddleware<any> = ({ search, next }) => {
+  console.log('Current search:', search)
+  const result = next(search)
+  console.log('Next search:', result)
+  return result
+}
+```
+
+Call `next(search)` to get the incoming search params, modify them, and return the final values.
+
+## Type Safety
+
+Middleware is fully type-safe when used with TypeScript:
+
+```tsx
+type MySearch = {
+  filter: string
+  page?: number
+}
+
+const middleware: SearchMiddleware<MySearch> = ({ search, next }) => {
+  const result = next(search)
+  // result is typed as MySearch
+  return {
+    ...result,
+    page: result.page ?? 1, // Type-safe access
+  }
+}
+```
+
+## Performance Considerations
+
+1. **Keep middleware simple** - Complex operations can slow down navigation
+2. **Avoid async operations** - Middleware should be synchronous
+3. **Use memoization** - Cache expensive computations
+4. **Minimize transformations** - Only modify params when necessary
+
+## Debugging Middleware
+
+Add logging to understand middleware behavior:
+
+```tsx
+const debugMiddleware: SearchMiddleware<any> = ({ search, next }) => {
+  console.group('Search Middleware')
+  console.log('Before:', search)
+  const result = next(search)
+  console.log('After:', result)
+  console.groupEnd()
+  return result
+}
+
+export const Route = createFileRoute('/debug')({n  search: {
+    middlewares: [debugMiddleware, /* other middleware */],
+  },
+})
+```
+
+## beforeLoad vs Middleware
+
+Understand the difference between these two concepts:
+
+**Search Middleware:**
+- Modifies search parameters
+- Runs during navigation
+- Synchronous only
+- Returns modified search params
+- Focused on URL state
+
+**beforeLoad Hook:**
+- Prepares route context and data
+- Can be asynchronous
+- Can redirect or throw errors
+- Returns context additions
+- Focused on route lifecycle
+
+```tsx
+export const Route = createFileRoute('/example')({n  // Middleware: Transform search params
+  search: {
+    middlewares: [
+      stripSearchParams({ page: 1 }),
+    ],
+  },
+  // beforeLoad: Prepare context, check auth, etc.
+  beforeLoad: async ({ context, search }) => {
+    if (!context.user) {
+      throw redirect({ to: '/login' })
+    }
+    return {
+      permissions: await fetchPermissions(context.user.id),
+    }
+  },
+})
+```
+
+## Best Practices
+
+1. **Apply at the highest route** - Place middleware on parent routes to affect all children
+2. **Document behavior** - Comment why middleware is needed
+3. **Test edge cases** - Ensure middleware handles missing or invalid params
+4. **Keep it pure** - Middleware should not have side effects
+5. **Use built-in middleware** - Prefer `retainSearchParams` and `stripSearchParams` over custom solutions
+6. **Consider inheritance** - Child routes inherit parent middleware
+7. **Order matters** - Place middleware in logical execution order
+
+## Related
+
+- [Search Params Validation](/router/advanced/validation)
+- [Search Params Concept](/router/concepts/search-params)
+- [Navigation](/router/concepts/navigation)
+- [Route Guards](/router/guides/route-guards)

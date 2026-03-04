@@ -1,0 +1,632 @@
+---
+title: Vue Start
+description: Build full-stack applications with Vue and TanStack Start
+---
+
+# Vue Start
+
+TanStack Start provides full support for Vue 3, enabling you to build type-safe, full-stack applications with Vue's Composition API.
+
+## Overview
+
+Vue Start combines:
+- **Vue 3** - Progressive JavaScript framework with Composition API
+- **TanStack Router** - Type-safe routing with search params
+- **TanStack Start** - Server functions and full-stack capabilities
+
+## Installation
+
+```bash
+npm install @tanstack/vue-start @tanstack/vue-router
+```
+
+## Server Functions
+
+Create server functions with `createServerFn`:
+
+```vue
+<script setup lang="ts">
+import { createServerFn } from '@tanstack/vue-start'
+
+const fetchUser = createServerFn({ method: 'GET' })
+  .inputValidator((id: string) => id)
+  .handler(async ({ data }) => {
+    const user = await db.user.findUnique({ where: { id: data } })
+    return user
+  })
+</script>
+```
+
+### Using in Route Loaders
+
+```typescript
+// src/routes/users.$userId.ts
+import { createFileRoute } from '@tanstack/vue-router'
+import { fetchUser } from '~/utils/users'
+
+export const Route = createFileRoute('/users/$userId')({  
+  loader: async ({ params }) => {
+    const user = await fetchUser({ data: params.userId })
+    return { user }
+  },
+})
+```
+
+```vue
+<!-- src/routes/users.$userId.vue -->
+<script setup lang="ts">
+import { Route } from './users.$userId'
+
+const data = Route.useLoaderData()
+</script>
+
+<template>
+  <div>User: {{ data.user.name }}</div>
+</template>
+```
+
+### POST Mutations
+
+```typescript
+import { createServerFn } from '@tanstack/vue-start'
+
+const updateProfile = createServerFn({ method: 'POST' })
+  .inputValidator((data: { name: string; email: string }) => data)
+  .handler(async ({ data }) => {
+    await db.user.update({ where: { id: 1 }, data })
+    return { success: true }
+  })
+```
+
+## useServerFn Composable
+
+Use `useServerFn` to call server functions from components with automatic redirect handling:
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+import { useServerFn } from '@tanstack/vue-start'
+import { updateProfile } from '~/utils/users'
+
+const updateProfileFn = useServerFn(updateProfile)
+const pending = ref(false)
+
+const handleSave = async () => {
+  pending.value = true
+  try {
+    await updateProfileFn({
+      data: { name: 'John', email: 'john@example.com' }
+    })
+  } finally {
+    pending.value = false
+  }
+}
+</script>
+
+<template>
+  <button @click="handleSave" :disabled="pending">
+    {{ pending ? 'Saving...' : 'Save' }}
+  </button>
+</template>
+```
+
+## Components
+
+### StartClient
+
+The root client component for Vue applications:
+
+```typescript
+// src/entry-client.ts
+import { createApp } from 'vue'
+import { StartClient } from '@tanstack/vue-start/client'
+
+const app = createApp(StartClient)
+app.mount('#root')
+```
+
+### StartServer
+
+The root server component for SSR:
+
+```typescript
+// src/entry-server.ts
+import { renderToString } from 'vue/server-renderer'
+import { StartServer } from '@tanstack/vue-start/server'
+import { createSSRApp } from 'vue'
+
+export async function render(request: Request) {
+  const router = createRouter()
+  // ... setup router
+  
+  const app = createSSRApp(() => h(StartServer, { router }))
+  const html = await renderToString(app)
+  
+  return new Response(html, {
+    headers: { 'Content-Type': 'text/html' },
+  })
+}
+```
+
+## Routing
+
+### File-Based Routes
+
+Organize routes in the `src/routes` directory:
+
+```
+src/
+  routes/
+    __root.vue          # Root route
+    index.vue           # /
+    about.vue           # /about
+    posts/
+      index.vue         # /posts
+      $postId.vue       # /posts/:postId
+```
+
+### Root Route
+
+```vue
+<!-- src/routes/__root.vue -->
+<script setup lang="ts">
+import { createRootRoute } from '@tanstack/vue-router'
+import { RouterView } from '@tanstack/vue-router'
+
+export const Route = createRootRoute({
+  head: () => ({
+    meta: [
+      { charset: 'utf-8' },
+      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+    ],
+  }),
+})
+</script>
+
+<template>
+  <html>
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+    </head>
+    <body>
+      <div id="app">
+        <RouterView />
+      </div>
+    </body>
+  </html>
+</template>
+```
+
+### Dynamic Routes
+
+```typescript
+// src/routes/posts.$postId.ts
+import { createFileRoute } from '@tanstack/vue-router'
+import { fetchPost } from '~/utils/posts'
+
+export const Route = createFileRoute('/posts/$postId')({  
+  loader: async ({ params }) => {
+    const post = await fetchPost({ data: params.postId })
+    return { post }
+  },
+})
+```
+
+```vue
+<!-- src/routes/posts.$postId.vue -->
+<script setup lang="ts">
+import { Route } from './posts.$postId'
+
+const data = Route.useLoaderData()
+</script>
+
+<template>
+  <article>
+    <h1>{{ data.post.title }}</h1>
+    <p>{{ data.post.body }}</p>
+  </article>
+</template>
+```
+
+## Composition API
+
+### Refs and Reactive
+
+Vue's reactivity works seamlessly with server functions:
+
+```vue
+<script setup lang="ts">
+import { ref, reactive } from 'vue'
+import { useServerFn } from '@tanstack/vue-start'
+import { searchUsers } from '~/utils/users'
+
+const query = ref('')
+const results = ref([])
+const searchFn = useServerFn(searchUsers)
+
+const handleSearch = async () => {
+  const data = await searchFn({ data: { query: query.value } })
+  results.value = data
+}
+</script>
+
+<template>
+  <div>
+    <input v-model="query" @input="handleSearch" />
+    <div v-for="user in results" :key="user.id">
+      {{ user.name }}
+    </div>
+  </div>
+</template>
+```
+
+### Computed Properties
+
+```vue
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { Route } from './users'
+
+const data = Route.useLoaderData()
+const filter = ref('')
+
+const filteredUsers = computed(() => {
+  return data.value.users.filter(user => 
+    user.name.toLowerCase().includes(filter.value.toLowerCase())
+  )
+})
+</script>
+
+<template>
+  <input v-model="filter" placeholder="Filter users..." />
+  <div v-for="user in filteredUsers" :key="user.id">
+    {{ user.name }}
+  </div>
+</template>
+```
+
+## Data Loading
+
+### Deferred Loading
+
+```typescript
+// src/routes/posts.$postId.ts
+import { createFileRoute } from '@tanstack/vue-router'
+import { fetchPost, fetchComments } from '~/utils/posts'
+
+export const Route = createFileRoute('/posts/$postId')({  
+  loader: async ({ params }) => ({
+    post: await fetchPost({ data: params.postId }),
+    // Deferred - loads after initial render
+    comments: fetchComments({ data: params.postId }),
+  }),
+})
+```
+
+```vue
+<!-- src/routes/posts.$postId.vue -->
+<script setup lang="ts">
+import { Suspense } from 'vue'
+import { Route } from './posts.$postId'
+import { Await } from '@tanstack/vue-router'
+
+const data = Route.useLoaderData()
+</script>
+
+<template>
+  <div>
+    <h1>{{ data.post.title }}</h1>
+    <Suspense>
+      <template #default>
+        <Await :promise="data.comments" v-slot="{ data: comments }">
+          <div v-for="comment in comments" :key="comment.id">
+            {{ comment.text }}
+          </div>
+        </Await>
+      </template>
+      <template #fallback>
+        <div>Loading comments...</div>
+      </template>
+    </Suspense>
+  </div>
+</template>
+```
+
+## Forms
+
+### Progressive Enhancement
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+import { useServerFn } from '@tanstack/vue-start'
+import { createUser } from '~/utils/users'
+
+const createUserFn = useServerFn(createUser)
+const pending = ref(false)
+const email = ref('')
+const password = ref('')
+
+const handleSubmit = async () => {
+  pending.value = true
+  try {
+    await createUserFn({
+      data: { email: email.value, password: password.value },
+    })
+  } finally {
+    pending.value = false
+  }
+}
+</script>
+
+<template>
+  <form @submit.prevent="handleSubmit">
+    <input v-model="email" type="email" required />
+    <input v-model="password" type="password" required />
+    <button type="submit" :disabled="pending">
+      {{ pending ? 'Creating...' : 'Sign Up' }}
+    </button>
+  </form>
+</template>
+```
+
+### Form Validation
+
+```vue
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { useServerFn } from '@tanstack/vue-start'
+import { createUser } from '~/utils/users'
+
+const createUserFn = useServerFn(createUser)
+const email = ref('')
+const password = ref('')
+
+const isValid = computed(() => {
+  return email.value.includes('@') && password.value.length >= 8
+})
+
+const handleSubmit = async () => {
+  if (!isValid.value) return
+  await createUserFn({
+    data: { email: email.value, password: password.value },
+  })
+}
+</script>
+
+<template>
+  <form @submit.prevent="handleSubmit">
+    <input v-model="email" type="email" required />
+    <input v-model="password" type="password" required />
+    <button type="submit" :disabled="!isValid">
+      Sign Up
+    </button>
+  </form>
+</template>
+```
+
+## Middleware
+
+### Authentication Middleware
+
+```typescript
+import { createMiddleware } from '@tanstack/vue-start'
+import { redirect } from '@tanstack/vue-router'
+
+const authMiddleware = createMiddleware({ type: 'function' })
+  .server(async ({ next, context }) => {
+    const session = await getSession(context.request)
+    if (!session) {
+      throw redirect({ to: '/login' })
+    }
+    return next({ context: { user: session.user } })
+  })
+
+const getProfile = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    return { name: context.user.name }
+  })
+```
+
+## Client-Only Code
+
+Mark browser-only modules:
+
+```typescript
+import '@tanstack/vue-start/client-only'
+import { ref, onMounted } from 'vue'
+
+export function useLocalStorage(key: string) {
+  const value = ref(localStorage.getItem(key))
+  
+  onMounted(() => {
+    localStorage.setItem(key, value.value ?? '')
+  })
+  
+  return value
+}
+```
+
+## Server-Only Code
+
+Mark server-only modules:
+
+```typescript
+import '@tanstack/vue-start/server-only'
+import { db } from '~/db'
+
+export async function getUsers() {
+  return db.user.findMany()
+}
+```
+
+## Error Handling
+
+```typescript
+import { createFileRoute } from '@tanstack/vue-router'
+
+export const Route = createFileRoute('/')({  
+  errorComponent: ({ error }) => ({
+    template: `
+      <div>
+        <h1>Error</h1>
+        <pre>{{ error.message }}</pre>
+      </div>
+    `,
+    props: { error },
+  }),
+})
+```
+
+## Streaming
+
+Stream responses with `RawStream`:
+
+```typescript
+import { createServerFn, RawStream } from '@tanstack/vue-start'
+
+const streamData = createServerFn({ method: 'GET' }).handler(async () => {
+  return new RawStream(async (controller) => {
+    for (let i = 0; i < 10; i++) {
+      controller.send(`Chunk ${i}\n`)
+      await new Promise(r => setTimeout(r, 100))
+    }
+    controller.end()
+  })
+})
+```
+
+## Best Practices
+
+### Use Composition API
+
+Prefer `<script setup>` for cleaner code:
+
+```vue
+<!-- ✅ Good -->
+<script setup lang="ts">
+import { ref } from 'vue'
+const count = ref(0)
+</script>
+
+<!-- ❌ Avoid -->
+<script lang="ts">
+export default {
+  data() {
+    return { count: 0 }
+  },
+}
+</script>
+```
+
+### Suspense for Loading States
+
+Use Suspense for async components:
+
+```vue
+<template>
+  <Suspense>
+    <template #default>
+      <AsyncComponent />
+    </template>
+    <template #fallback>
+      <Loading />
+    </template>
+  </Suspense>
+</template>
+```
+
+### Combine with Vue Query
+
+Use Vue Query for advanced data fetching:
+
+```vue
+<script setup lang="ts">
+import { useQuery } from '@tanstack/vue-query'
+import { useServerFn } from '@tanstack/vue-start'
+import { fetchUser } from '~/utils/users'
+
+const fetchUserFn = useServerFn(fetchUser)
+const userId = ref('123')
+
+const { data: user, isLoading } = useQuery({
+  queryKey: ['user', userId],
+  queryFn: async () => fetchUserFn({ data: userId.value }),
+})
+</script>
+
+<template>
+  <div v-if="isLoading">Loading...</div>
+  <div v-else-if="user">{{ user.name }}</div>
+</template>
+```
+
+## Single File Components
+
+Leverage Vue's SFC format:
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+import { useServerFn } from '@tanstack/vue-start'
+import { updateProfile } from '~/utils/users'
+
+const name = ref('')
+const email = ref('')
+const updateFn = useServerFn(updateProfile)
+
+const handleSubmit = async () => {
+  await updateFn({
+    data: { name: name.value, email: email.value },
+  })
+}
+</script>
+
+<template>
+  <form @submit.prevent="handleSubmit">
+    <input v-model="name" placeholder="Name" />
+    <input v-model="email" type="email" placeholder="Email" />
+    <button type="submit">Save</button>
+  </form>
+</template>
+
+<style scoped>
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+</style>
+```
+
+## API Reference
+
+### Vue-Specific Exports
+
+All exports from `@tanstack/vue-start`:
+
+```typescript
+import {
+  createServerFn,      // Create server functions
+  createMiddleware,    // Create middleware
+  useServerFn,         // Use server functions in components
+  RawStream,           // Stream responses
+  // ... all other Start exports
+} from '@tanstack/vue-start'
+```
+
+### Differences from React
+
+1. **Refs instead of State**: Use `ref` instead of `useState`
+2. **Composition API**: Use composables instead of hooks
+3. **Template Syntax**: Use Vue's template syntax with directives
+4. **Reactivity System**: Vue's reactivity is based on Proxies
+
+## Related
+
+- [Vue Documentation](https://vuejs.org/)
+- [TanStack Router](https://tanstack.com/router)
+- [TanStack Query](https://tanstack.com/query)
+- [React Start](/start/react/server-functions) - React version for comparison

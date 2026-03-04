@@ -1,0 +1,544 @@
+---
+title: Server Functions
+description: Learn how to use server functions for type-safe client-server communication in TanStack Start.
+---
+
+# Server Functions
+
+Server functions are the primary way to execute server-side code from your client components in TanStack Start. They provide type-safe, RPC-like functionality with automatic serialization and validation.
+
+## What are Server Functions?
+
+Server functions are functions that:
+
+- **Run only on the server** - Never bundled into client code
+- **Type-safe** - Full TypeScript support from client to server
+- **Automatically serialized** - Handle complex data types seamlessly
+- **HTTP-based** - Use standard HTTP methods (GET, POST)
+- **Middleware-enabled** - Support authentication, validation, and more
+
+## Creating Server Functions
+
+Use `createServerFn` to define a server function:
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+
+const getUser = createServerFn({ method: 'GET' })
+  .inputValidator((id: string) => id)
+  .handler(async ({ data: userId }) => {
+    // This code runs ONLY on the server
+    const user = await db.users.findById(userId)
+    return { id: user.id, name: user.name, email: user.email }
+  })
+```
+
+Reference: `packages/start-client-core/src/createServerFn.ts:53-196`
+
+## HTTP Methods
+
+Server functions support GET and POST methods:
+
+### GET Requests
+
+Ideal for data fetching without side effects:
+
+```tsx
+const getPosts = createServerFn({ method: 'GET' })
+  .handler(async () => {
+    const posts = await db.posts.findAll()
+    return posts
+  })
+
+// Usage
+const posts = await getPosts()
+```
+
+GET requests:
+- Serialize data in the URL query string
+- Can be cached by browsers and CDNs
+- Have size limitations (~1MB)
+
+Reference: `packages/start-server-core/src/server-functions-handler.ts:131-146`
+
+### POST Requests
+
+Use for mutations and large payloads:
+
+```tsx
+const createPost = createServerFn({ method: 'POST' })
+  .inputValidator(z.object({
+    title: z.string(),
+    content: z.string(),
+  }))
+  .handler(async ({ data }) => {
+    const post = await db.posts.create(data)
+    return post
+  })
+
+// Usage
+const post = await createPost({ 
+  data: { 
+    title: 'Hello World', 
+    content: 'My first post' 
+  } 
+})
+```
+
+POST requests:
+- Send data in the request body
+- Support larger payloads
+- Can handle FormData for file uploads
+
+Reference: `packages/start-server-core/src/server-functions-handler.ts:38-65`
+
+## Input Validation
+
+Validate inputs before they reach your handler:
+
+### With Zod
+
+```tsx
+import { z } from 'zod'
+import { createServerFn } from '@tanstack/react-start'
+
+const updateUser = createServerFn({ method: 'POST' })
+  .inputValidator(z.object({
+    id: z.string().uuid(),
+    name: z.string().min(1).max(100),
+    email: z.string().email(),
+    age: z.number().int().positive().optional(),
+  }))
+  .handler(async ({ data }) => {
+    // data is fully validated and typed
+    await db.users.update(data.id, data)
+    return { success: true }
+  })
+```
+
+### With Custom Validators
+
+```tsx
+const myValidator = (input: unknown) => {
+  if (typeof input !== 'string') {
+    throw new Error('Expected string')
+  }
+  return input.toLowerCase()
+}
+
+const myServerFn = createServerFn({ method: 'POST' })
+  .inputValidator(myValidator)
+  .handler(async ({ data }) => {
+    // data is guaranteed to be a lowercase string
+    return data
+  })
+```
+
+Reference: `packages/start-client-core/src/createServerFn.ts:749-773`
+
+## Middleware
+
+Add middleware to server functions for cross-cutting concerns:
+
+```tsx
+import { createMiddleware, createServerFn } from '@tanstack/react-start'
+
+// Create reusable middleware
+const authMiddleware = createMiddleware()
+  .server(async ({ request, next }) => {
+    const session = await getSession(request.headers.get('cookie'))
+    
+    if (!session) {
+      throw new Error('Unauthorized')
+    }
+    
+    return next({ context: { userId: session.userId } })
+  })
+
+// Apply middleware to server function
+const getPrivateData = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    // context.userId is available from middleware
+    const data = await db.privateData.findByUserId(context.userId)
+    return data
+  })
+```
+
+Reference: `packages/start-client-core/src/createServerFn.ts:68-90`
+
+## Context Sharing
+
+Share data between middleware and handlers:
+
+```tsx
+const logMiddleware = createMiddleware()
+  .server(async ({ next }) => {
+    const startTime = Date.now()
+    const result = await next({ 
+      context: { startTime } 
+    })
+    console.log(`Duration: ${Date.now() - startTime}ms`)
+    return result
+  })
+
+const myFunction = createServerFn({ method: 'POST' })
+  .middleware([logMiddleware])
+  .handler(async ({ context }) => {
+    // context.startTime is available
+    console.log('Started at:', context.startTime)
+    return { success: true }
+  })
+```
+
+Reference: `packages/start-client-core/src/createServerFn.ts:256-286`
+
+## Error Handling
+
+Handle errors gracefully:
+
+```tsx
+const riskyOperation = createServerFn({ method: 'POST' })
+  .handler(async ({ data }) => {
+    try {
+      const result = await performOperation(data)
+      return { success: true, result }
+    } catch (error) {
+      console.error('Operation failed:', error)
+      throw new Error('Operation failed')
+    }
+  })
+
+// Usage with error handling
+try {
+  const result = await riskyOperation({ data: 'test' })
+  console.log('Success:', result)
+} catch (error) {
+  console.error('Error:', error.message)
+}
+```
+
+Reference: `packages/start-server-core/src/server-functions-handler.ts:316-360`
+
+## FormData Support
+
+Handle file uploads and form submissions:
+
+```tsx
+const uploadFile = createServerFn({ method: 'POST' })
+  .handler(async ({ data }) => {
+    // data is FormData when Content-Type is multipart/form-data
+    const file = data.get('file') as File
+    const title = data.get('title') as string
+    
+    // Process the file
+    const buffer = await file.arrayBuffer()
+    const url = await storage.upload(buffer, file.name)
+    
+    // Save to database
+    await db.files.create({ title, url })
+    
+    return { url }
+  })
+
+// Usage with FormData
+const formData = new FormData()
+formData.append('file', fileInput.files[0])
+formData.append('title', 'My Document')
+
+const result = await uploadFile({ data: formData })
+```
+
+Reference: `packages/start-server-core/src/server-functions-handler.ts:85-128`
+
+## Streaming Responses
+
+Return streaming data from server functions:
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+
+// Return a ReadableStream
+const streamData = createServerFn({ method: 'GET' })
+  .handler(async () => {
+    return new ReadableStream({
+      async start(controller) {
+        for (let i = 0; i < 10; i++) {
+          await new Promise(r => setTimeout(r, 100))
+          controller.enqueue({ index: i, data: `Item ${i}` })
+        }
+        controller.close()
+      },
+    })
+  })
+
+// Or use an async generator
+const streamWithGenerator = createServerFn({ method: 'GET' })
+  .handler(async function* () {
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 100))
+      yield { index: i, data: `Item ${i}` }
+    }
+  })
+
+// Usage
+const stream = await streamData()
+const reader = stream.getReader()
+
+while (true) {
+  const { value, done } = await reader.read()
+  if (done) break
+  console.log('Received:', value)
+}
+
+// Or with async generator
+for await (const item of await streamWithGenerator()) {
+  console.log('Received:', item)
+}
+```
+
+Reference: `examples/react/start-streaming-data-from-server-functions/src/routes/index.tsx:58-89`
+
+## Calling Server Functions
+
+### From Loaders
+
+```tsx
+export const Route = createFileRoute('/posts')({ 
+  loader: async () => {
+    const posts = await getPosts()
+    return { posts }
+  },
+})
+```
+
+### From Components
+
+```tsx
+function CreatePost() {
+  const [title, setTitle] = useState('')
+  
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    await createPost({ data: { title, content: '' } })
+    // Redirect or show success message
+  }
+  
+  return (
+    <form onSubmit={handleSubmit}>
+      <input value={title} onChange={e => setTitle(e.target.value)} />
+      <button type="submit">Create</button>
+    </form>
+  )
+}
+```
+
+### From Effects
+
+```tsx
+function UserProfile({ userId }: { userId: string }) {
+  const [user, setUser] = useState(null)
+  
+  useEffect(() => {
+    getUser({ data: userId }).then(setUser)
+  }, [userId])
+  
+  return user ? <div>{user.name}</div> : <div>Loading...</div>
+}
+```
+
+## Server-to-Server Calls
+
+When calling a server function from another server function, use SSR RPC:
+
+```tsx
+import { createSsrRpc } from '@tanstack/react-start'
+
+// In one file
+const getUserInternal = createServerFn({ method: 'GET' })
+  .handler(async ({ data: userId }) => {
+    return db.users.findById(userId)
+  })
+
+// In another file
+const getUserWithPosts = createServerFn({ method: 'GET' })
+  .handler(async ({ data: userId }) => {
+    // Direct call on the server - no HTTP roundtrip
+    const user = await getUserInternal({ data: userId })
+    const posts = await db.posts.findByUserId(userId)
+    return { user, posts }
+  })
+```
+
+Reference: `packages/start-server-core/src/createSsrRpc.ts:8-26`
+
+## Advanced Patterns
+
+### Composable Middleware
+
+```tsx
+const authMiddleware = createMiddleware()
+  .server(async ({ next }) => {
+    const user = await authenticate()
+    return next({ context: { user } })
+  })
+
+const rbacMiddleware = createMiddleware()
+  .server(async ({ next, context }) => {
+    if (!hasPermission(context.user, 'admin')) {
+      throw new Error('Forbidden')
+    }
+    return next()
+  })
+
+// Compose multiple middleware
+const adminAction = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware, rbacMiddleware])
+  .handler(async () => {
+    // Only admins can reach here
+  })
+```
+
+### Custom Fetch Options
+
+```tsx
+// Pass custom fetch options
+const result = await myServerFn({
+  data: { foo: 'bar' },
+  headers: { 'X-Custom': 'value' },
+  signal: abortController.signal,
+})
+```
+
+### Response Customization
+
+```tsx
+import { getResponse } from '@tanstack/react-start/server'
+
+const customResponse = createServerFn({ method: 'GET' })
+  .handler(async () => {
+    const response = getResponse()
+    
+    // Set custom status and headers
+    response.status = 201
+    response.statusText = 'Created'
+    response.headers.set('X-Custom-Header', 'value')
+    
+    return { data: 'Created' }
+  })
+```
+
+Reference: `packages/start-server-core/src/request-response.ts`
+
+## Security Best Practices
+
+### 1. Validate All Inputs
+
+```tsx
+const safeFunction = createServerFn({ method: 'POST' })
+  .inputValidator(z.object({
+    userId: z.string().uuid(), // Only accept valid UUIDs
+    action: z.enum(['like', 'unlike']), // Whitelist actions
+  }))
+  .handler(async ({ data }) => {
+    // data is guaranteed to be valid
+  })
+```
+
+### 2. Check Authentication
+
+```tsx
+const protectedFunction = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    // context.user is guaranteed to exist
+  })
+```
+
+### 3. Never Expose Secrets
+
+```tsx
+// ❌ Bad - exposes secret to client
+const badFunction = createServerFn({ method: 'GET' })
+  .handler(() => {
+    return { apiKey: process.env.SECRET_API_KEY }
+  })
+
+// ✅ Good - keeps secret on server
+const goodFunction = createServerFn({ method: 'GET' })
+  .handler(async () => {
+    const data = await fetchWithSecret(process.env.SECRET_API_KEY)
+    return data // Only return safe data
+  })
+```
+
+### 4. Rate Limiting
+
+```tsx
+const rateLimitMiddleware = createMiddleware()
+  .server(async ({ request, next }) => {
+    const ip = request.headers.get('x-forwarded-for')
+    const limited = await checkRateLimit(ip)
+    
+    if (limited) {
+      throw new Error('Rate limit exceeded')
+    }
+    
+    return next()
+  })
+```
+
+## Performance Tips
+
+### 1. Use GET for Cacheable Data
+
+```tsx
+// GET requests can be cached
+const getCacheableData = createServerFn({ method: 'GET' })
+  .handler(async () => {
+    // This response can be cached by CDN
+    return expensiveOperation()
+  })
+```
+
+### 2. Batch Requests
+
+```tsx
+// Instead of multiple calls
+const user = await getUser({ data: userId })
+const posts = await getPosts({ data: userId })
+
+// Batch into one
+const getUserWithPosts = createServerFn({ method: 'GET' })
+  .handler(async ({ data: userId }) => {
+    const [user, posts] = await Promise.all([
+      db.users.findById(userId),
+      db.posts.findByUserId(userId),
+    ])
+    return { user, posts }
+  })
+```
+
+### 3. Avoid Unnecessary Serialization
+
+```tsx
+// Return only what you need
+const getUser = createServerFn({ method: 'GET' })
+  .handler(async ({ data: userId }) => {
+    const user = await db.users.findById(userId)
+    // Only return necessary fields
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      // Don't include password, internal IDs, etc.
+    }
+  })
+```
+
+## Next Steps
+
+- Explore [Full-Stack Architecture](./full-stack) to understand the complete picture
+- Learn about [SSR](./ssr) to render on the server
+- Discover [Streaming](./streaming) for progressive data loading
+- Review [Deployment](./deployment) for production considerations

@@ -1,97 +1,258 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: TanStack Router Documentation
+description: A fully type-safe, client-first router and full-stack framework for React, Solid, and Vue
+mode: custom
 ---
 
-## Setting up
+<div className="relative overflow-hidden dark:bg-[#0f1117] bg-white py-20">
+  <div className="max-w-7xl mx-auto px-6 lg:px-8">
+    <div className="lg:grid lg:grid-cols-12 lg:gap-8">
+      <div className="lg:col-span-7">
+        <h1 className="text-5xl lg:text-6xl font-bold dark:text-white text-gray-900 mb-6">
+          Type-Safe Routing for Modern Web Apps
+        </h1>
+        <p className="text-lg lg:text-xl dark:text-gray-400 text-gray-600 max-w-2xl mb-8">
+          TanStack Router delivers end-to-end type safety, built-in caching, and powerful data loading capabilities for React, Solid, and Vue applications.
+        </p>
+        <div className="flex flex-wrap gap-4">
+          <a
+            href="/router/quickstart"
+            className="inline-flex items-center justify-center px-6 py-3 rounded-lg text-base font-semibold text-white bg-[#00C9A7] hover:bg-[#00A085] transition-colors"
+          >
+            Get Started
+          </a>
+          <a
+            href="/router/introduction"
+            className="inline-flex items-center justify-center px-6 py-3 rounded-lg text-base font-semibold dark:text-gray-100 text-gray-900 border dark:border-[#27272a] border-gray-200 dark:bg-white/5 bg-gray-50 dark:hover:bg-white/10 hover:bg-gray-100 transition-colors"
+          >
+            Learn More
+          </a>
+        </div>
+      </div>
+      <div className="hidden lg:block lg:col-span-5">
+        <div className="dark:bg-[#1a1d27] bg-gray-50 rounded-2xl p-6 dark:border-[#27272a] border border-gray-200">
+          ```tsx
+          import { createRouter, RouterProvider } from '@tanstack/react-router'
+          import { routeTree } from './routeTree.gen'
 
-Get your documentation site up and running in minutes.
+          const router = createRouter({ routeTree })
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+          function App() {
+            return <RouterProvider router={router} />
+          }
+          ```
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-## Make it yours
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-semibold dark:text-white text-gray-900 mb-4">
+    Why TanStack Router?
+  </h2>
+  <p className="text-base dark:text-gray-400 text-gray-600 mb-8">
+    Build applications with confidence using a router designed for the modern web
+  </p>
+  
+  <CardGroup cols={3}>
+    <Card title="Type-Safe Routes" icon="shield-check" href="/router/concepts/type-safety">
+      Full TypeScript inference for routes, params, search params, and loaders
+    </Card>
+    <Card title="Built-in Caching" icon="database" href="/router/concepts/caching">
+      Automatic caching and revalidation of route data with fine-grained control
+    </Card>
+    <Card title="Smart Prefetching" icon="bolt" href="/router/concepts/prefetching">
+      Intelligent prefetching strategies for instant navigation experiences
+    </Card>
+    <Card title="Search Params" icon="magnifying-glass" href="/router/concepts/search-params">
+      First-class support for type-safe, validated search parameters
+    </Card>
+    <Card title="Nested Routes" icon="sitemap" href="/router/guides/nested-routes">
+      Powerful nested routing with layouts, error boundaries, and transitions
+    </Card>
+    <Card title="Full-Stack Ready" icon="server" href="/start/introduction">
+      Scale to full-stack with TanStack Start for SSR, streaming, and server functions
+    </Card>
+  </CardGroup>
+</div>
 
-Design a docs site that looks great and empowers your users.
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-semibold dark:text-white text-gray-900 mb-4">
+    Quick Start
+  </h2>
+  <p className="text-base dark:text-gray-400 text-gray-600 mb-8">
+    Get up and running with TanStack Router in minutes
+  </p>
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+  <Steps>
+    <Step title="Install the package">
+      Install TanStack Router using your preferred package manager:
+      
+      <CodeGroup>
+      ```bash npm
+      npm install @tanstack/react-router
+      ```
+      ```bash yarn
+      yarn add @tanstack/react-router
+      ```
+      ```bash pnpm
+      pnpm add @tanstack/react-router
+      ```
+      </CodeGroup>
+    </Step>
 
-## Create beautiful pages
+    <Step title="Create your routes">
+      Define your application routes using file-based or code-based routing:
 
-Everything you need to create world-class documentation.
+      ```tsx
+      import { createRootRoute, createRoute } from '@tanstack/react-router'
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+      const rootRoute = createRootRoute()
 
-## Need inspiration?
+      const indexRoute = createRoute({
+        getParentRoute: () => rootRoute,
+        path: '/',
+        component: () => <div>Hello TanStack Router!</div>
+      })
+      ```
+    </Step>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+    <Step title="Set up the router">
+      Create and configure your router instance:
+
+      ```tsx
+      import { createRouter, RouterProvider } from '@tanstack/react-router'
+      import { routeTree } from './routeTree.gen'
+
+      const router = createRouter({ routeTree })
+
+      function App() {
+        return <RouterProvider router={router} />
+      }
+      ```
+    </Step>
+
+    <Step title="Start navigating">
+      Use the Link component for type-safe navigation:
+
+      ```tsx
+      import { Link } from '@tanstack/react-router'
+
+      function Navigation() {
+        return (
+          <nav>
+            <Link to="/">Home</Link>
+            <Link to="/about">About</Link>
+            <Link to="/posts/$postId" params={{ postId: '1' }}>Post 1</Link>
+          </nav>
+        )
+      }
+      ```
+    </Step>
+  </Steps>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-semibold dark:text-white text-gray-900 mb-4">
+    Explore TanStack Router
+  </h2>
+  <p className="text-base dark:text-gray-400 text-gray-600 mb-8">
+    Deep dive into routing concepts and advanced features
+  </p>
+
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <a href="/router/concepts/routing" className="group block rounded-2xl dark:border-[#27272a] border border-gray-200 overflow-hidden no-underline dark:hover:border-[#00C9A7] hover:border-[#00C9A7] transition-colors">
+      <div className="p-6">
+        <h3 className="text-base font-semibold dark:text-white text-gray-900 mb-2 group-hover:text-[#00C9A7] transition-colors">
+          Core Concepts
+        </h3>
+        <p className="text-sm dark:text-gray-400 text-gray-600 mb-3">
+          Learn about routing fundamentals, type safety, and data loading patterns
+        </p>
+        <div className="flex items-center text-sm font-medium text-[#00C9A7]">
+          <span>Explore concepts</span>
+          <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </a>
+
+    <a href="/router/guides/file-based-routing" className="group block rounded-2xl dark:border-[#27272a] border border-gray-200 overflow-hidden no-underline dark:hover:border-[#00C9A7] hover:border-[#00C9A7] transition-colors">
+      <div className="p-6">
+        <h3 className="text-base font-semibold dark:text-white text-gray-900 mb-2 group-hover:text-[#00C9A7] transition-colors">
+          Routing Guides
+        </h3>
+        <p className="text-sm dark:text-gray-400 text-gray-600 mb-3">
+          Step-by-step guides for file-based routing, nested routes, and error handling
+        </p>
+        <div className="flex items-center text-sm font-medium text-[#00C9A7]">
+          <span>View guides</span>
+          <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </a>
+
+    <a href="/start/introduction" className="group block rounded-2xl dark:border-[#27272a] border border-gray-200 overflow-hidden no-underline dark:hover:border-[#00C9A7] hover:border-[#00C9A7] transition-colors">
+      <div className="p-6">
+        <h3 className="text-base font-semibold dark:text-white text-gray-900 mb-2 group-hover:text-[#00C9A7] transition-colors">
+          TanStack Start
+        </h3>
+        <p className="text-sm dark:text-gray-400 text-gray-600 mb-3">
+          Build full-stack applications with SSR, streaming, and server functions
+        </p>
+        <div className="flex items-center text-sm font-medium text-[#00C9A7]">
+          <span>Learn about Start</span>
+          <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </a>
+
+    <a href="/api/react-router/router" className="group block rounded-2xl dark:border-[#27272a] border border-gray-200 overflow-hidden no-underline dark:hover:border-[#00C9A7] hover:border-[#00C9A7] transition-colors">
+      <div className="p-6">
+        <h3 className="text-base font-semibold dark:text-white text-gray-900 mb-2 group-hover:text-[#00C9A7] transition-colors">
+          API Reference
+        </h3>
+        <p className="text-sm dark:text-gray-400 text-gray-600 mb-3">
+          Complete API documentation for Router, Route, Link, hooks, and components
+        </p>
+        <div className="flex items-center text-sm font-medium text-[#00C9A7]">
+          <span>Browse API docs</span>
+          <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </a>
+  </div>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="rounded-2xl dark:bg-[#1a1d27] bg-gray-50 dark:border-[#27272a] border border-gray-200 p-8 text-center">
+    <h2 className="text-2xl font-semibold dark:text-white text-gray-900 mb-4">
+      Ready to build with TanStack Router?
+    </h2>
+    <p className="text-base dark:text-gray-400 text-gray-600 mb-6 max-w-2xl mx-auto">
+      Start building type-safe, performant routing for your React, Solid, or Vue application today
+    </p>
+    <div className="flex flex-wrap justify-center gap-4">
+      <a
+        href="/router/quickstart"
+        className="inline-flex items-center justify-center px-6 py-3 rounded-lg text-base font-semibold text-white bg-[#00C9A7] hover:bg-[#00A085] transition-colors"
+      >
+        Get Started with Router
+      </a>
+      <a
+        href="/start/quickstart"
+        className="inline-flex items-center justify-center px-6 py-3 rounded-lg text-base font-semibold dark:text-gray-100 text-gray-900 border dark:border-[#27272a] border-gray-200 dark:bg-white/5 bg-white dark:hover:bg-white/10 hover:bg-gray-50 transition-colors"
+      >
+        Try TanStack Start
+      </a>
+    </div>
+  </div>
+</div>

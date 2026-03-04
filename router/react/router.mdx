@@ -1,0 +1,197 @@
+---
+title: Router
+---
+
+The Router is the core object that manages routing state, navigation, and route matching in TanStack Router.
+
+## Creating a Router
+
+### `createRouter`
+
+Creates a new Router instance for React.
+
+```tsx
+import { createRouter } from '@tanstack/react-router'
+
+const router = createRouter({
+  routeTree,
+  context: { userId: '123' },
+  defaultPreload: 'intent',
+})
+```
+
+**Source:** `packages/react-router/src/router.ts:91`
+
+<ParamField path="options" type="RouterConstructorOptions" required>
+  Router options used to configure the router.
+
+  <Expandable title="RouterConstructorOptions properties">
+    <ParamField path="routeTree" type="AnyRoute" required>
+      Your route definitions created with `createRootRoute` and child routes.
+    </ParamField>
+
+    <ParamField path="context" type="TRouterContext">
+      Required if the root route was created with `createRootRouteWithContext`. Provides context available to all routes.
+    </ParamField>
+
+    <ParamField path="defaultPreload" type="'intent' | 'render' | 'viewport' | boolean" default="false">
+      The default preload strategy for all `Link` components.
+      - `'intent'`: Preload on hover/focus
+      - `'render'`: Preload when link renders
+      - `'viewport'`: Preload when link enters viewport
+      - `false`: Disable preloading
+    </ParamField>
+
+    <ParamField path="defaultPreloadDelay" type="number" default="0">
+      Delay in milliseconds before preloading on hover/focus.
+    </ParamField>
+
+    <ParamField path="defaultComponent" type="RouteComponent" default="Outlet">
+      The default component a route should use if no component is provided.
+    </ParamField>
+
+    <ParamField path="defaultErrorComponent" type="ErrorRouteComponent" default="ErrorComponent">
+      The default error component a route should use if no error component is provided.
+    </ParamField>
+
+    <ParamField path="defaultPendingComponent" type="RouteComponent">
+      The default pending component a route should use if no pending component is provided.
+    </ParamField>
+
+    <ParamField path="defaultNotFoundComponent" type="NotFoundRouteComponent" default="NotFound">
+      The default notFound component a route should use if no notFound component is provided.
+    </ParamField>
+
+    <ParamField path="Wrap" type="(props: { children: any }) => React.JSX.Element">
+      A component that will be used to wrap the entire router. Only non-DOM-rendering components like providers should be used.
+    </ParamField>
+
+    <ParamField path="InnerWrap" type="(props: { children: any }) => React.JSX.Element">
+      A component that will be used to wrap the inner contents of the router where you also need access to the router context and hooks.
+    </ParamField>
+
+    <ParamField path="defaultOnCatch" type="(error: Error, errorInfo: React.ErrorInfo) => void">
+      The default onCatch handler for errors caught by the Router ErrorBoundary.
+    </ParamField>
+
+    <ParamField path="basepath" type="string">
+      The basepath for the router instance (e.g., '/app').
+    </ParamField>
+
+    <ParamField path="history" type="RouterHistory">
+      Custom history implementation. By default, uses browser history.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="returns" type="Router">
+  A Router instance to be provided to `RouterProvider`.
+</ResponseField>
+
+## Router Class
+
+The `Router` class extends `RouterCore` from `@tanstack/router-core`.
+
+**Source:** `packages/react-router/src/router.ts:95-119`
+
+```tsx
+export class Router<
+  TRouteTree extends AnyRoute,
+  TTrailingSlashOption extends TrailingSlashOption = 'never',
+  TDefaultStructuralSharingOption extends boolean = false,
+  TRouterHistory extends RouterHistory = RouterHistory,
+  TDehydrated extends Record<string, any> = Record<string, any>,
+> extends RouterCore<...> {
+  constructor(options: RouterConstructorOptions<...>) {
+    super(options)
+  }
+}
+```
+
+## RouterProvider
+
+Top-level component that renders the active route matches and provides the router to the React tree via context.
+
+```tsx
+import { RouterProvider } from '@tanstack/react-router'
+
+function App() {
+  return <RouterProvider router={router} />
+}
+```
+
+**Source:** `packages/react-router/src/RouterProvider.tsx:58-67`
+
+<ParamField path="router" type="TRouter" required>
+  The router instance created with `createRouter`.
+</ParamField>
+
+<ParamField path="...rest" type="Partial<RouterOptions>">
+  Additional router options to update the router instance. Accepts the same options as `createRouter` to update the router after creation.
+</ParamField>
+
+## Usage Example
+
+```tsx
+import { createRouter, RouterProvider, createRootRoute, createRoute } from '@tanstack/react-router'
+
+// Create routes
+const rootRoute = createRootRoute({
+  component: () => (
+    <div>
+      <h1>My App</h1>
+      <Outlet />
+    </div>
+  ),
+})
+
+const indexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  component: () => <div>Home Page</div>,
+})
+
+const aboutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/about',
+  component: () => <div>About Page</div>,
+})
+
+const routeTree = rootRoute.addChildren([indexRoute, aboutRoute])
+
+// Create router
+const router = createRouter({
+  routeTree,
+  defaultPreload: 'intent',
+  defaultPreloadDelay: 50,
+})
+
+// Provide to app
+function App() {
+  return <RouterProvider router={router} />
+}
+```
+
+## Type Safety
+
+To enable type-safe routing throughout your app, register your router type:
+
+```tsx
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router
+  }
+}
+```
+
+This enables autocomplete and type-checking for:
+- Route paths in `Link` components
+- Search params
+- Route params
+- Navigation options
+
+## See Also
+
+- [RouterProvider API](./RouterProvider)
+- [createRootRoute](./createRootRoute)
+- [Route Configuration](../../guide/routes)

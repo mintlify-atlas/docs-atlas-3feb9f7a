@@ -1,0 +1,458 @@
+---
+title: Data Fetching
+---
+
+# Data Fetching
+
+TanStack Start provides powerful data fetching capabilities that integrate seamlessly with TanStack Router. Learn how to fetch data efficiently using server functions, loaders, and various loading strategies.
+
+## Overview
+
+Data fetching in TanStack Start can happen:
+
+- **On the server** during SSR
+- **On the client** after hydration
+- **In route loaders** before navigation
+- **In components** on-demand
+
+## Using Route Loaders
+
+Route loaders are the primary way to fetch data for a route:
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router'
+import { createServerFn } from '@tanstack/react-start'
+
+const fetchPost = createServerFn({ method: 'GET' })
+  .inputValidator((postId: string) => postId)
+  .handler(async ({ data }) => {
+    const res = await fetch(`https://api.example.com/posts/${data}`)
+    return await res.json()
+  })
+
+export const Route = createFileRoute('/posts/$postId')({
+  loader: ({ params }) => fetchPost({ data: params.postId }),
+  component: PostComponent,
+})
+
+function PostComponent() {
+  const post = Route.useLoaderData()
+  return (
+    <div>
+      <h1>{post.title}</h1>
+      <p>{post.body}</p>
+    </div>
+  )
+}
+```
+
+## Data Loading Strategies
+
+### Parallel Loading
+
+Load multiple resources simultaneously:
+
+```tsx
+const fetchPost = createServerFn({ method: 'GET' })
+  .inputValidator((id: string) => id)
+  .handler(async ({ data }) => {
+    return await db.posts.findById(data)
+  })
+
+const fetchComments = createServerFn({ method: 'GET' })
+  .inputValidator((postId: string) => postId)
+  .handler(async ({ data }) => {
+    return await db.comments.findByPostId(data)
+  })
+
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    // Load in parallel
+    const [post, comments] = await Promise.all([
+      fetchPost({ data: params.postId }),
+      fetchComments({ data: params.postId }),
+    ])
+
+    return { post, comments }
+  },
+})
+```
+
+### Deferred Loading
+
+Defer slow data to improve perceived performance:
+
+```tsx
+import { Await } from '@tanstack/react-router'
+import { Suspense } from 'react'
+
+const fastData = createServerFn({ method: 'GET' }).handler(async () => {
+  return await db.users.findCurrent()
+})
+
+const slowData = createServerFn({ method: 'GET' }).handler(async () => {
+  await new Promise((r) => setTimeout(r, 2000)) // Simulate slow query
+  return await db.analytics.getReport()
+})
+
+export const Route = createFileRoute('/dashboard')({
+  loader: async () => {
+    return {
+      user: await fastData(), // Await fast data
+      analytics: slowData(), // Don't await - defer to client
+    }
+  },
+  component: Dashboard,
+})
+
+function Dashboard() {
+  const { user, analytics } = Route.useLoaderData()
+
+  return (
+    <div>
+      <h1>Welcome, {user.name}</h1>
+      
+      <Suspense fallback={<div>Loading analytics...</div>}>
+        <Await promise={analytics}>
+          {(data) => <AnalyticsChart data={data} />}
+        </Await>
+      </Suspense>
+    </div>
+  )
+}
+```
+
+### Waterfall Loading
+
+Load data that depends on previous results:
+
+```tsx
+export const Route = createFileRoute('/users/$userId/posts')({
+  loader: async ({ params }) => {
+    // Load user first
+    const user = await fetchUser({ data: params.userId })
+    
+    // Then load posts based on user's preferences
+    const posts = await fetchUserPosts({
+      data: {
+        userId: user.id,
+        limit: user.preferences.postsPerPage,
+      },
+    })
+
+    return { user, posts }
+  },
+})
+```
+
+### Conditional Loading
+
+Load data based on conditions:
+
+```tsx
+export const Route = createFileRoute('/profile')({
+  loader: async ({ context }) => {
+    const isAuthenticated = await checkAuth()
+    
+    if (!isAuthenticated) {
+      throw redirect({ to: '/login' })
+    }
+
+    const user = await fetchCurrentUser()
+    
+    // Only fetch admin data if user is admin
+    const adminData = user.isAdmin ? await fetchAdminData() : null
+
+    return { user, adminData }
+  },
+})
+```
+
+## Fetching in Components
+
+Fetch data on-demand within components:
+
+```tsx
+import { useState } from 'react'
+import { createServerFn } from '@tanstack/react-start'
+
+const searchPosts = createServerFn({ method: 'GET' })
+  .inputValidator((query: string) => query)
+  .handler(async ({ data }) => {
+    return await db.posts.search(data)
+  })
+
+function SearchComponent() {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState([])
+  const [loading, setLoading] = useState(false)
+
+  const handleSearch = async () => {
+    setLoading(true)
+    try {
+      const data = await searchPosts({ data: query })
+      setResults(data)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div>
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+      />
+      {loading && <div>Searching...</div>}
+      {results.map((post) => (
+        <div key={post.id}>{post.title}</div>
+      ))}
+    </div>
+  )
+}
+```
+
+## Caching Strategies
+
+### Client-Side Caching
+
+Implement caching with React Query:
+
+```tsx
+import { useQuery } from '@tanstack/react-query'
+import { fetchPosts } from '~/utils/posts'
+
+function PostsList() {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['posts'],
+    queryFn: () => fetchPosts(),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  })
+
+  if (isLoading) return <div>Loading...</div>
+  if (error) return <div>Error: {error.message}</div>
+
+  return (
+    <ul>
+      {data.map((post) => (
+        <li key={post.id}>{post.title}</li>
+      ))}
+    </ul>
+  )
+}
+```
+
+### Static Data Caching
+
+Cache server function results statically:
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+import { staticFunctionMiddleware } from '@tanstack/start-static-server-functions'
+
+const getStaticData = createServerFn({ method: 'GET' })
+  .middleware([staticFunctionMiddleware])
+  .handler(async () => {
+    // This result will be cached at build time in production
+    return await db.settings.findAll()
+  })
+```
+
+## Preloading Data
+
+Preload data before navigation:
+
+```tsx
+import { Link } from '@tanstack/react-router'
+
+function PostLink({ postId }: { postId: string }) {
+  return (
+    <Link
+      to="/posts/$postId"
+      params={{ postId }}
+      preload="intent" // Preload on hover/focus
+    >
+      View Post
+    </Link>
+  )
+}
+```
+
+Preload options:
+- `preload="intent"` - Preload on hover or focus
+- `preload="render"` - Preload when link renders
+- `preload={false}` - Disable preloading
+
+## Error Handling
+
+### Handling Errors in Loaders
+
+```tsx
+import { notFound } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    try {
+      return await fetchPost({ data: params.postId })
+    } catch (error) {
+      if (error.status === 404) {
+        throw notFound()
+      }
+      throw error
+    }
+  },
+  errorComponent: ({ error }) => {
+    return <div>Error loading post: {error.message}</div>
+  },
+  notFoundComponent: () => {
+    return <div>Post not found</div>
+  },
+})
+```
+
+### Error Boundaries
+
+```tsx
+export const Route = createFileRoute('/posts/$postId')({
+  loader: ({ params }) => fetchPost({ data: params.postId }),
+  errorComponent: PostErrorComponent,
+})
+
+function PostErrorComponent({ error }: { error: Error }) {
+  return (
+    <div className="error">
+      <h2>Failed to load post</h2>
+      <p>{error.message}</p>
+      <button onClick={() => window.location.reload()}>
+        Try Again
+      </button>
+    </div>
+  )
+}
+```
+
+## Revalidation
+
+### Invalidate Route Data
+
+```tsx
+import { useRouter } from '@tanstack/react-router'
+
+function PostEditor() {
+  const router = useRouter()
+
+  const handleSave = async (data: PostData) => {
+    await updatePost({ data })
+    
+    // Revalidate the route data
+    await router.invalidate()
+  }
+
+  return <form onSubmit={handleSave}>...</form>
+}
+```
+
+### Revalidate on Actions
+
+```tsx
+const updatePost = createServerFn({ method: 'POST' })
+  .inputValidator((data: PostInput) => data)
+  .handler(async ({ data }) => {
+    await db.posts.update(data)
+    return { success: true }
+  })
+
+export const Route = createFileRoute('/posts/$postId/edit')({
+  loader: ({ params }) => fetchPost({ data: params.postId }),
+  component: EditPost,
+})
+
+function EditPost() {
+  const router = useRouter()
+  const post = Route.useLoaderData()
+
+  const handleSubmit = async (formData: FormData) => {
+    await updatePost({ data: Object.fromEntries(formData) })
+    await router.invalidate() // Revalidate all routes
+    router.navigate({ to: '/posts/$postId', params: { postId: post.id } })
+  }
+
+  return <form onSubmit={handleSubmit}>...</form>
+}
+```
+
+## Optimistic Updates
+
+```tsx
+import { useState } from 'react'
+import { useRouter } from '@tanstack/react-router'
+
+function LikeButton({ postId, initialLikes }: Props) {
+  const [likes, setLikes] = useState(initialLikes)
+  const [isOptimistic, setIsOptimistic] = useState(false)
+  const router = useRouter()
+
+  const handleLike = async () => {
+    // Optimistic update
+    setLikes((prev) => prev + 1)
+    setIsOptimistic(true)
+
+    try {
+      await likePost({ data: postId })
+      await router.invalidate()
+    } catch (error) {
+      // Rollback on error
+      setLikes((prev) => prev - 1)
+      alert('Failed to like post')
+    } finally {
+      setIsOptimistic(false)
+    }
+  }
+
+  return (
+    <button onClick={handleLike} disabled={isOptimistic}>
+      {likes} Likes {isOptimistic && '(saving...)'}
+    </button>
+  )
+}
+```
+
+## Best Practices
+
+1. **Fetch Early**
+   - Use route loaders to fetch data before rendering
+   - Leverage preloading for anticipated navigations
+
+2. **Parallel When Possible**
+   - Load independent data in parallel with `Promise.all()`
+   - Only use waterfalls when data dependencies exist
+
+3. **Defer Slow Operations**
+   - Use deferred loading for non-critical data
+   - Show meaningful loading states
+
+4. **Handle Errors Gracefully**
+   - Provide error boundaries for each route
+   - Give users clear error messages and recovery options
+
+5. **Cache Strategically**
+   - Cache frequently accessed, rarely changing data
+   - Use stale-while-revalidate patterns
+   - Consider static generation for truly static data
+
+6. **Optimize Payload Size**
+   - Only fetch the data you need
+   - Use database projections/selections
+   - Consider pagination for large datasets
+
+7. **Type Everything**
+   - Define types for all data structures
+   - Use validators to ensure runtime type safety
+   - Leverage TypeScript's inference
+
+## Next Steps
+
+- Add [Middleware](./middleware) to your data fetching
+- Learn about [Server Functions](./server-functions) in depth
+- Explore [Static Generation](./static-generation) for static data

@@ -1,0 +1,410 @@
+---
+title: Route
+---
+
+Routes define the structure of your application, including paths, components, loaders, and validation logic.
+
+## Creating Routes
+
+### `createRoute`
+
+Creates a non-root Route instance for code-based routing.
+
+```tsx
+import { createRoute } from '@tanstack/react-router'
+
+const postRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts/$postId',
+  component: PostComponent,
+})
+```
+
+**Source:** `packages/react-router/src/route.tsx:330-410`
+
+<ParamField path="options" type="RouteOptions" required>
+  Route configuration options.
+
+  <Expandable title="RouteOptions properties">
+    <ParamField path="getParentRoute" type="() => TParentRoute" required>
+      Function that returns the parent route. Used to build the route tree.
+    </ParamField>
+
+    <ParamField path="path" type="string" required>
+      The path segment for this route. Can include path parameters using `$` prefix (e.g., `/posts/$postId`).
+    </ParamField>
+
+    <ParamField path="id" type="string">
+      Custom route ID. If not provided, auto-generated from the path.
+    </ParamField>
+
+    <ParamField path="component" type="RouteComponent">
+      The component to render when this route is active.
+    </ParamField>
+
+    <ParamField path="errorComponent" type="ErrorRouteComponent">
+      Component to render when an error occurs during route loading or rendering.
+    </ParamField>
+
+    <ParamField path="pendingComponent" type="RouteComponent">
+      Component to show while the route is loading (during async data fetching).
+    </ParamField>
+
+    <ParamField path="notFoundComponent" type="NotFoundRouteComponent">
+      Component to render when a not-found error is thrown.
+    </ParamField>
+
+    <ParamField path="validateSearch" type="(search: unknown) => TSearchSchema">
+      Function to validate and parse search parameters. Use with validation libraries like Zod.
+    </ParamField>
+
+    <ParamField path="beforeLoad" type="(opts: BeforeLoadContext) => Promise<void> | void">
+      Function called before the route loads. Useful for authentication checks and redirects.
+    </ParamField>
+
+    <ParamField path="loader" type="(opts: LoaderContext) => Promise<TLoaderData> | TLoaderData">
+      Function to load data for the route. Data is cached and available via `useLoaderData`.
+    </ParamField>
+
+    <ParamField path="loaderDeps" type="(opts: LoaderDepsContext) => TLoaderDeps">
+      Function to derive dependencies that invalidate the loader when changed.
+    </ParamField>
+
+    <ParamField path="context" type="(opts: ContextOptions) => TRouteContext">
+      Function to create route-specific context available to child routes and components.
+    </ParamField>
+
+    <ParamField path="onCatch" type="(error: Error, errorInfo: ErrorInfo) => void">
+      Error handler for errors caught by the route's error boundary.
+    </ParamField>
+
+    <ParamField path="onError" type="(error: Error) => void">
+      Handler for errors during route loading.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="returns" type="Route">
+  A Route instance to be attached to the route tree.
+</ResponseField>
+
+### `createRootRoute`
+
+Creates a root Route instance used to build your route tree.
+
+```tsx
+import { createRootRoute, Outlet } from '@tanstack/react-router'
+
+const rootRoute = createRootRoute({
+  component: () => (
+    <div>
+      <nav>Navigation</nav>
+      <Outlet />
+    </div>
+  ),
+})
+```
+
+**Source:** `packages/react-router/src/route.tsx:605-657`
+
+<ParamField path="options" type="RootRouteOptions">
+  Root route configuration options (similar to RouteOptions but without path or parent).
+</ParamField>
+
+<ResponseField name="returns" type="RootRoute">
+  A root route instance.
+</ResponseField>
+
+### `createRootRouteWithContext`
+
+Creates a root route factory that requires a router context type.
+
+```tsx
+import { createRootRouteWithContext } from '@tanstack/react-router'
+
+interface MyRouterContext {
+  user: { id: string; name: string }
+  queryClient: QueryClient
+}
+
+const rootRoute = createRootRouteWithContext<MyRouterContext>()({
+  component: RootComponent,
+})
+```
+
+**Source:** `packages/react-router/src/route.tsx:435-470`
+
+<ResponseField name="returns" type="() => RootRoute">
+  A factory function to configure and return a root route with typed context.
+</ResponseField>
+
+## Route API
+
+### `getRouteApi`
+
+Returns a route-specific API that exposes type-safe hooks pre-bound to a single route ID.
+
+```tsx
+import { getRouteApi } from '@tanstack/react-router'
+
+const postRoute = getRouteApi('/posts/$postId')
+
+function PostComponent() {
+  const { postId } = postRoute.useParams()
+  const post = postRoute.useLoaderData()
+  const navigate = postRoute.useNavigate()
+
+  return <div>{post.title}</div>
+}
+```
+
+**Source:** `packages/react-router/src/route.tsx:90-95`
+
+<ParamField path="id" type="RouteId" required>
+  Route ID string literal for the target route.
+</ParamField>
+
+<ResponseField name="returns" type="RouteApi">
+  A RouteApi instance bound to the given route ID with methods:
+  
+  - `useMatch(opts?)` - Access the route match
+  - `useRouteContext(opts?)` - Access route context
+  - `useSearch(opts?)` - Access search params
+  - `useParams(opts?)` - Access path params
+  - `useLoaderDeps(opts?)` - Access loader deps
+  - `useLoaderData(opts?)` - Access loader data
+  - `useNavigate()` - Get navigate function
+  - `Link` - Pre-bound Link component
+  - `notFound(opts?)` - Throw not-found error
+</ResponseField>
+
+## Route Class
+
+The Route class provides route-specific hooks and components.
+
+**Source:** `packages/react-router/src/route.tsx:170-317`
+
+### Instance Methods
+
+Each Route instance has the following methods:
+
+#### `useMatch`
+
+```tsx
+const match = route.useMatch()
+```
+
+Returns the current route match with params, search, loader data, and more.
+
+#### `useRouteContext`
+
+```tsx
+const context = route.useRouteContext()
+```
+
+Returns the route's context object.
+
+#### `useSearch`
+
+```tsx
+const search = route.useSearch()
+```
+
+Returns the route's validated search parameters.
+
+#### `useParams`
+
+```tsx
+const params = route.useParams()
+```
+
+Returns the route's path parameters.
+
+#### `useLoaderData`
+
+```tsx
+const data = route.useLoaderData()
+```
+
+Returns the route's loader data.
+
+#### `useLoaderDeps`
+
+```tsx
+const deps = route.useLoaderDeps()
+```
+
+Returns the route's loader dependencies.
+
+#### `useNavigate`
+
+```tsx
+const navigate = route.useNavigate()
+```
+
+Returns a navigate function pre-bound to the route's path.
+
+#### `Link`
+
+```tsx
+<route.Link to="/posts/$postId" params={{ postId: '123' }}>
+  View Post
+</route.Link>
+```
+
+A Link component pre-bound to the route's path.
+
+## Component Types
+
+### `RouteComponent`
+
+A standard route component.
+
+```tsx
+export type RouteComponent = AsyncRouteComponent<{}>
+```
+
+Can be a regular component or lazy-loaded:
+
+```tsx
+const route = createRoute({
+  path: '/about',
+  component: () => <div>About</div>,
+})
+
+// Or lazy
+const route = createRoute({
+  path: '/about',
+  component: lazy(() => import('./About')),
+})
+```
+
+**Source:** `packages/react-router/src/route.tsx:682`
+
+### `ErrorRouteComponent`
+
+Component for rendering errors.
+
+```tsx
+export type ErrorRouteComponent = AsyncRouteComponent<ErrorComponentProps>
+```
+
+Receives error and reset props:
+
+```tsx
+function MyErrorComponent({ error, reset }: ErrorComponentProps) {
+  return (
+    <div>
+      <h2>Error: {error.message}</h2>
+      <button onClick={reset}>Try Again</button>
+    </div>
+  )
+}
+```
+
+**Source:** `packages/react-router/src/route.tsx:684`
+
+### `NotFoundRouteComponent`
+
+Component for 404 errors.
+
+```tsx
+export type NotFoundRouteComponent = RouteTypes<NotFoundRouteProps>['component']
+```
+
+**Source:** `packages/react-router/src/route.tsx:686`
+
+## Usage Examples
+
+### Basic Route
+
+```tsx
+import { createRoute } from '@tanstack/react-router'
+import { rootRoute } from './root'
+
+const homeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  component: () => <div>Welcome Home!</div>,
+})
+```
+
+### Route with Params
+
+```tsx
+const postRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts/$postId',
+  component: () => {
+    const { postId } = postRoute.useParams()
+    return <div>Post {postId}</div>
+  },
+})
+```
+
+### Route with Loader
+
+```tsx
+const postRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts/$postId',
+  loader: async ({ params }) => {
+    const post = await fetchPost(params.postId)
+    return { post }
+  },
+  component: () => {
+    const { post } = postRoute.useLoaderData()
+    return <div>{post.title}</div>
+  },
+})
+```
+
+### Route with Search Validation
+
+```tsx
+import { z } from 'zod'
+
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts',
+  validateSearch: z.object({
+    page: z.number().default(1),
+    filter: z.string().optional(),
+  }),
+  component: () => {
+    const search = postsRoute.useSearch()
+    return <div>Page {search.page}</div>
+  },
+})
+```
+
+### Route with Error Handling
+
+```tsx
+const postRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts/$postId',
+  loader: async ({ params }) => {
+    const post = await fetchPost(params.postId)
+    if (!post) throw new Error('Post not found')
+    return { post }
+  },
+  errorComponent: ({ error, reset }) => (
+    <div>
+      <h2>Failed to load post</h2>
+      <p>{error.message}</p>
+      <button onClick={reset}>Retry</button>
+    </div>
+  ),
+  component: () => {
+    const { post } = postRoute.useLoaderData()
+    return <div>{post.title}</div>
+  },
+})
+```
+
+## See Also
+
+- [Route Guide](../../guide/routes)
+- [Data Loading Guide](../../guide/data-loading)
+- [Search Params Guide](../../guide/search-params)

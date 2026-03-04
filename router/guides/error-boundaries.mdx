@@ -1,0 +1,418 @@
+---
+title: Error Boundaries
+---
+
+# Error Boundaries
+
+Error boundaries catch errors during route loading, rendering, and navigation, allowing you to display fallback UI instead of breaking your entire application.
+
+## Overview
+
+TanStack Router provides built-in error boundary support at multiple levels:
+- Route-level error components
+- Router-level default error component
+- Granular error handling per route
+- Error recovery and retry mechanisms
+
+## Basic Error Handling
+
+### Route Error Component
+
+Define error UI for individual routes:
+
+```tsx src/routes/posts/$postId.tsx
+import { createFileRoute, ErrorComponent } from '@tanstack/react-router'
+import { fetchPost, NotFoundError } from '../../api'
+import type { ErrorComponentProps } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    const post = await fetchPost(params.postId)
+    return post
+  },
+  errorComponent: PostErrorComponent,
+  component: PostComponent,
+})
+
+function PostErrorComponent({ error }: ErrorComponentProps) {
+  if (error instanceof NotFoundError) {
+    return (
+      <div className="p-4">
+        <h2>Post Not Found</h2>
+        <p>The post you're looking for doesn't exist.</p>
+      </div>
+    )
+  }
+  
+  // Fall back to default error component for other errors
+  return <ErrorComponent error={error} />
+}
+
+function PostComponent() {
+  const post = Route.useLoaderData()
+  return <div>{post.title}</div>
+}
+```
+
+### Default Error Component
+
+TanStack Router provides a default error component:
+
+```tsx
+import { ErrorComponent } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/posts/$postId')({
+  loader: ({ params }) => fetchPost(params.postId),
+  errorComponent: ErrorComponent, // Use default
+  component: PostComponent,
+})
+```
+
+## Router-Level Error Handling
+
+Set a default error component for all routes:
+
+```tsx src/main.tsx
+import { createRouter } from '@tanstack/react-router'
+import { DefaultCatchBoundary } from './components/DefaultCatchBoundary'
+
+const router = createRouter({
+  routeTree,
+  defaultErrorComponent: DefaultCatchBoundary,
+})
+```
+
+```tsx src/components/DefaultCatchBoundary.tsx
+import { ErrorComponent } from '@tanstack/react-router'
+import { Link } from '@tanstack/react-router'
+import type { ErrorComponentProps } from '@tanstack/react-router'
+
+export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="max-w-md w-full p-6 bg-red-50 rounded-lg">
+        <h1 className="text-2xl font-bold text-red-900 mb-4">
+          Something went wrong
+        </h1>
+        <ErrorComponent error={error} />
+        <div className="mt-4">
+          <Link to="/" className="text-blue-600 hover:underline">
+            Go back home
+          </Link>
+        </div>
+      </div>
+    </div>
+  )
+}
+```
+
+## Root Route Error Boundary
+
+Catch errors at the application level:
+
+```tsx src/routes/__root.tsx
+import { createRootRoute, Outlet } from '@tanstack/react-router'
+import { DefaultCatchBoundary } from '../components/DefaultCatchBoundary'
+import { NotFound } from '../components/NotFound'
+
+export const Route = createRootRoute({
+  errorComponent: DefaultCatchBoundary,
+  notFoundComponent: NotFound,
+  component: RootComponent,
+})
+
+function RootComponent() {
+  return (
+    <>
+      <Outlet />
+    </>
+  )
+}
+```
+
+## Custom Error Types
+
+Create custom error classes for better error handling:
+
+```tsx src/utils/errors.ts
+export class NotFoundError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'NotFoundError'
+  }
+}
+
+export class UnauthorizedError extends Error {
+  constructor(message = 'Unauthorized') {
+    super(message)
+    this.name = 'UnauthorizedError'
+  }
+}
+
+export class ValidationError extends Error {
+  constructor(
+    message: string,
+    public fields: Record<string, string>,
+  ) {
+    super(message)
+    this.name = 'ValidationError'
+  }
+}
+```
+
+Handle them in your error component:
+
+```tsx
+import { NotFoundError, UnauthorizedError, ValidationError } from '../utils/errors'
+
+function PostErrorComponent({ error, reset }: ErrorComponentProps) {
+  if (error instanceof NotFoundError) {
+    return (
+      <div>
+        <h2>Not Found</h2>
+        <p>{error.message}</p>
+      </div>
+    )
+  }
+  
+  if (error instanceof UnauthorizedError) {
+    return (
+      <div>
+        <h2>Access Denied</h2>
+        <p>You don't have permission to view this content.</p>
+        <Link to="/login">Log in</Link>
+      </div>
+    )
+  }
+  
+  if (error instanceof ValidationError) {
+    return (
+      <div>
+        <h2>Validation Error</h2>
+        <ul>
+          {Object.entries(error.fields).map(([field, message]) => (
+            <li key={field}>{field}: {message}</li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
+  
+  // Generic error
+  return <ErrorComponent error={error} />
+}
+```
+
+## Error Recovery
+
+The error component receives a `reset` function to retry:
+
+```tsx
+import type { ErrorComponentProps } from '@tanstack/react-router'
+
+function PostErrorComponent({ error, reset }: ErrorComponentProps) {
+  return (
+    <div className="p-4">
+      <h2 className="text-xl font-bold text-red-600">Error Loading Post</h2>
+      <p className="my-2">{error.message}</p>
+      <button
+        onClick={() => reset()}
+        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+      >
+        Try Again
+      </button>
+    </div>
+  )
+}
+```
+
+## Loader Errors
+
+Errors thrown in loaders are caught by error boundaries:
+
+```tsx
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    const response = await fetch(`/api/posts/${params.postId}`)
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new NotFoundError(`Post ${params.postId} not found`)
+      }
+      if (response.status === 401) {
+        throw new UnauthorizedError()
+      }
+      throw new Error('Failed to load post')
+    }
+    
+    return response.json()
+  },
+  errorComponent: PostErrorComponent,
+})
+```
+
+## Not Found vs Error
+
+Distinguish between 404 errors and other errors:
+
+```tsx src/routes/posts/$postId.tsx
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    const post = await fetchPost(params.postId)
+    
+    if (!post) {
+      throw notFound() // Triggers notFoundComponent
+    }
+    
+    return post
+  },
+  notFoundComponent: () => (
+    <div>
+      <h2>Post Not Found</h2>
+      <Link to="/posts">View all posts</Link>
+    </div>
+  ),
+  errorComponent: ({ error }) => (
+    <div>
+      <h2>Error Loading Post</h2>
+      <p>{error.message}</p>
+    </div>
+  ),
+})
+```
+
+## Nested Error Boundaries
+
+Error boundaries at different levels provide granular error handling:
+
+```tsx src/routes/__root.tsx
+export const Route = createRootRoute({
+  errorComponent: RootErrorComponent, // Catches all unhandled errors
+})
+```
+
+```tsx src/routes/posts.tsx
+export const Route = createFileRoute('/posts')({
+  errorComponent: PostsErrorComponent, // Catches errors in posts section
+})
+```
+
+```tsx src/routes/posts/$postId.tsx
+export const Route = createFileRoute('/posts/$postId')({
+  errorComponent: PostErrorComponent, // Catches errors for specific post
+})
+```
+
+Errors bubble up to the nearest error boundary.
+
+## Global Error Handling
+
+Combine with window error handlers for comprehensive coverage:
+
+```tsx src/main.tsx
+import { useEffect } from 'react'
+
+function App() {
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      console.error('Global error:', event.error)
+      // Log to error tracking service
+      trackError(event.error)
+    }
+    
+    const handleRejection = (event: PromiseRejectionEvent) => {
+      console.error('Unhandled promise rejection:', event.reason)
+      trackError(event.reason)
+    }
+    
+    window.addEventListener('error', handleError)
+    window.addEventListener('unhandledrejection', handleRejection)
+    
+    return () => {
+      window.removeEventListener('error', handleError)
+      window.removeEventListener('unhandledrejection', handleRejection)
+    }
+  }, [])
+  
+  return <RouterProvider router={router} />
+}
+```
+
+## Error Tracking Integration
+
+Integrate with services like Sentry:
+
+```tsx
+import * as Sentry from '@sentry/react'
+import { ErrorComponent } from '@tanstack/react-router'
+import type { ErrorComponentProps } from '@tanstack/react-router'
+
+function CustomErrorComponent({ error, reset }: ErrorComponentProps) {
+  useEffect(() => {
+    // Report to Sentry
+    Sentry.captureException(error)
+  }, [error])
+  
+  return (
+    <div>
+      <h2>Something went wrong</h2>
+      <ErrorComponent error={error} />
+      <button onClick={reset}>Try Again</button>
+    </div>
+  )
+}
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Granular Boundaries" icon="layer-group">
+    Use error boundaries at multiple levels for better UX
+  </Card>
+  
+  <Card title="Custom Error Types" icon="tags">
+    Create specific error classes for different scenarios
+  </Card>
+  
+  <Card title="User-Friendly Messages" icon="message">
+    Show helpful error messages, not technical stack traces
+  </Card>
+  
+  <Card title="Error Recovery" icon="arrow-rotate-right">
+    Provide retry buttons when appropriate
+  </Card>
+</CardGroup>
+
+<Note>
+  **Development vs Production**: Show detailed error info in development, but user-friendly messages in production.
+</Note>
+
+<Warning>
+  **Don't catch everything**: Let critical errors bubble up. Only catch errors you can meaningfully handle.
+</Warning>
+
+## Testing Error Boundaries
+
+Test your error handling:
+
+```tsx
+// Trigger an error
+export const Route = createFileRoute('/test-error')({
+  loader: () => {
+    throw new Error('Test error')
+  },
+  errorComponent: ({ error }) => <div>Caught: {error.message}</div>,
+})
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Route Guards" href="./route-guards">
+    Prevent errors with validation before loading
+  </Card>
+  
+  <Card title="SSR" href="./ssr">
+    Handle errors in server-side rendering
+  </Card>
+</CardGroup>

@@ -1,0 +1,258 @@
+---
+title: Introduction to TanStack Router
+description: Learn about TanStack Router, a modern type-safe routing solution with built-in caching and URL state management for React, Solid, and Vue applications.
+---
+
+# Introduction to TanStack Router
+
+TanStack Router is a modern, type-safe routing solution with built-in caching and URL state management for React, Solid, and Vue applications. It provides a powerful and flexible API for building complex routing structures while maintaining excellent TypeScript support.
+
+## What is TanStack Router?
+
+TanStack Router is a fully type-safe router that goes beyond traditional routing libraries by integrating data loading, caching, and URL state management directly into the routing layer. It's designed to help you build scalable applications with confidence, leveraging TypeScript's type system to catch errors at compile time.
+
+<Note>
+  TanStack Router is part of the TanStack family of tools, which includes TanStack Query, TanStack Table, and more. It's designed with the same principles of developer experience and type safety.
+</Note>
+
+## Key Features
+
+TanStack Router provides a comprehensive set of features that make building modern web applications easier:
+
+### Type-Safe Navigation
+
+Every route, parameter, and search param is fully typed. The router provides autocomplete and type checking for all navigation, ensuring you never navigate to a non-existent route or use incorrect parameters.
+
+```tsx
+// TypeScript knows all valid routes and their parameters
+<Link to="/posts/$postId" params={{ postId: '123' }} />
+```
+
+### Built-in Data Loading
+
+Load data directly in your route definitions using loaders. The router handles loading states, errors, and caching automatically.
+
+```tsx
+const postRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '$postId',
+  loader: ({ params }) => fetchPost(params.postId),
+  component: PostComponent,
+})
+```
+
+Source: packages/react-router/src/index.tsx
+
+### URL State Management
+
+Manage complex application state in the URL with type-safe search params. TanStack Router provides built-in validation and serialization.
+
+### Code-Based & File-Based Routing
+
+Choose between code-based routing for full control or file-based routing for automatic route generation:
+
+<CodeGroup>
+```tsx Code-Based Routing
+import { createRoute, createRouter } from '@tanstack/react-router'
+
+const indexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  component: HomeComponent,
+})
+
+const routeTree = rootRoute.addChildren([indexRoute])
+const router = createRouter({ routeTree })
+```
+
+```tsx File-Based Routing
+// src/routes/index.tsx
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/')({ 
+  component: HomeComponent,
+})
+```
+</CodeGroup>
+
+Source: examples/react/quickstart/src/main.tsx:32-42 and examples/react/quickstart-file-based/src/routes/index.tsx:4-6
+
+### Automatic Code Splitting
+
+Lazy load routes and their dependencies automatically with built-in code splitting support:
+
+```tsx
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'posts',
+  loader: () => fetchPosts(),
+}).lazy(() => import('./posts.lazy').then((d) => d.Route))
+```
+
+Source: examples/react/basic/src/main.tsx:86-90
+
+### Nested Routing
+
+Build complex layouts with nested routes and outlets:
+
+```tsx
+function RootComponent() {
+  return (
+    <>
+      <div className="p-2 flex gap-2">
+        <Link to="/" className="[&.active]:font-bold">Home</Link>
+        <Link to="/about" className="[&.active]:font-bold">About</Link>
+      </div>
+      <hr />
+      <Outlet />
+    </>
+  )
+}
+```
+
+Source: examples/react/quickstart/src/main.tsx:15-28
+
+### Search Param Validation
+
+Validate and parse search parameters with support for Zod, Valibot, and ArkType:
+
+```tsx
+import { z } from 'zod'
+
+const searchSchema = z.object({
+  page: z.number().default(1),
+  filter: z.string().optional(),
+})
+
+const route = createRoute({
+  path: '/posts',
+  validateSearch: searchSchema,
+})
+```
+
+### Built-in DevTools
+
+Debug your routing with the included DevTools component:
+
+```tsx
+import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
+
+function App() {
+  return (
+    <>
+      <RouterProvider router={router} />
+      <TanStackRouterDevtools />
+    </>
+  )
+}
+```
+
+Source: examples/react/quickstart/src/main.tsx:27
+
+### Preloading & Caching
+
+Automatically preload routes on hover or intent, with configurable caching strategies:
+
+```tsx
+const router = createRouter({
+  routeTree,
+  defaultPreload: 'intent', // Preload on hover/focus
+  defaultStaleTime: 5000,   // Cache for 5 seconds
+})
+```
+
+Source: examples/react/basic/src/main.tsx:214-218
+
+### Server-Side Rendering (SSR)
+
+Full SSR support with streaming, hydration, and server-side navigation.
+
+## When to Use TanStack Router
+
+TanStack Router is ideal for:
+
+<Steps>
+  <Step title="Type-Safe Applications">
+    When you want compile-time safety for all your routing logic and navigation.
+  </Step>
+  
+  <Step title="Complex Data Requirements">
+    When your routes need to load data with sophisticated caching and error handling.
+  </Step>
+  
+  <Step title="URL State Management">
+    When you need to manage application state in the URL with validation and type safety.
+  </Step>
+  
+  <Step title="Large-Scale Applications">
+    When building applications that need automatic code splitting and performance optimization.
+  </Step>
+  
+  <Step title="Full-Stack TypeScript">
+    When you want end-to-end type safety from server to client.
+  </Step>
+</Steps>
+
+## Framework Support
+
+TanStack Router supports multiple frameworks:
+
+<CardGroup cols={3}>
+  <Card title="React" icon="react" href="/router/installation#react">
+    Full support for React 18+ with hooks and components
+  </Card>
+  
+  <Card title="Solid" icon="solid" href="/router/installation#solid">
+    Native Solid.js integration with fine-grained reactivity
+  </Card>
+  
+  <Card title="Vue" icon="vuejs" href="/router/installation#vue">
+    Vue 3 support with composition API
+  </Card>
+</CardGroup>
+
+## How It Compares
+
+TanStack Router stands out from other routing solutions:
+
+| Feature | TanStack Router | React Router | Next.js App Router |
+|---------|----------------|--------------|--------------------|
+| Type-Safe Routes | ✅ Full | ⚠️ Partial | ⚠️ Partial |
+| Type-Safe Params | ✅ | ❌ | ❌ |
+| Built-in Data Loading | ✅ | ⚠️ Limited | ✅ |
+| Search Param Validation | ✅ | ❌ | ❌ |
+| Built-in Caching | ✅ | ❌ | ✅ |
+| Framework Agnostic | ✅ | ❌ React only | ❌ React only |
+| File-Based Routing | ✅ Optional | ❌ | ✅ Required |
+| Code-Based Routing | ✅ | ✅ | ⚠️ Limited |
+
+<Warning>
+  While TanStack Router provides powerful features, it requires TypeScript for the best experience. If you're working in a JavaScript-only project, you may want to consider other options.
+</Warning>
+
+## Architecture Overview
+
+TanStack Router consists of several key packages:
+
+- **`@tanstack/router-core`** - Framework-agnostic core routing logic
+- **`@tanstack/react-router`** - React-specific bindings and components
+- **`@tanstack/solid-router`** - Solid-specific bindings and components
+- **`@tanstack/vue-router`** - Vue-specific bindings and components
+- **`@tanstack/router-plugin`** - Vite/Webpack/Rspack plugin for file-based routing
+- **`@tanstack/router-devtools`** - Development tools for debugging
+
+Source: packages/react-router/package.json:2, packages/solid-router/package.json:2, packages/vue-router/package.json:2, packages/router-core/package.json:2
+
+## Next Steps
+
+Ready to get started? Follow our guides:
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/router/installation">
+    Install TanStack Router in your project
+  </Card>
+  
+  <Card title="Quick Start" icon="rocket" href="/router/quickstart">
+    Build your first application with TanStack Router
+  </Card>
+</CardGroup>

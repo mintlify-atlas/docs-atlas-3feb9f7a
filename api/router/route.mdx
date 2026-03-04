@@ -1,0 +1,405 @@
+---
+title: Route API
+---
+
+# Route
+
+Routes define the structure of your application and handle data loading, rendering, and error handling.
+
+## Route Options
+
+Configuration options for creating a route.
+
+<ParamField path="path" type="string">
+  The path pattern for the route. Supports path params using `$param` syntax.
+  
+  ```tsx
+  path: '/posts/$postId'
+  path: '/files/$'
+  ```
+</ParamField>
+
+<ParamField path="id" type="string">
+  Custom route ID. If not provided, generated from the path.
+</ParamField>
+
+<ParamField path="getParentRoute" type="() => Route" required>
+  Function that returns the parent route.
+  
+  ```tsx
+  getParentRoute: () => rootRoute
+  ```
+</ParamField>
+
+<ParamField path="component" type="RouteComponent">
+  Component to render for this route.
+  
+  ```tsx
+  component: () => <PostsList />
+  ```
+</ParamField>
+
+<ParamField path="errorComponent" type="ErrorRouteComponent">
+  Component to render when the route throws an error.
+  
+  ```tsx
+  errorComponent: ({ error }) => <ErrorPage error={error} />
+  ```
+</ParamField>
+
+<ParamField path="pendingComponent" type="RouteComponent">
+  Component to render while the route is loading.
+  
+  ```tsx
+  pendingComponent: () => <LoadingSpinner />
+  ```
+</ParamField>
+
+<ParamField path="notFoundComponent" type="NotFoundRouteComponent">
+  Component to render when a child route is not found.
+</ParamField>
+
+<ParamField path="loader" type="LoaderFn">
+  Function to load data for the route.
+  
+  ```tsx
+  loader: async ({ params }) => {
+    const post = await fetchPost(params.postId)
+    return { post }
+  }
+  ```
+</ParamField>
+
+<ParamField path="beforeLoad" type="BeforeLoadFn">
+  Function that runs before the loader. Useful for authentication and redirects.
+  
+  ```tsx
+  beforeLoad: async ({ context }) => {
+    if (!context.user) {
+      throw redirect({ to: '/login' })
+    }
+  }
+  ```
+</ParamField>
+
+<ParamField path="validateSearch" type="SearchValidator">
+  Validator for search parameters. Can use Zod, Valibot, or custom validators.
+  
+  ```tsx
+  validateSearch: (search) => ({
+    page: Number(search.page) || 1,
+    filter: search.filter
+  })
+  ```
+</ParamField>
+
+<ParamField path="params" type="ParamsOptions">
+  Configuration for parsing and stringifying path params.
+  
+  ```tsx
+  params: {
+    parse: (params) => ({
+      postId: Number(params.postId)
+    }),
+    stringify: (params) => ({
+      postId: String(params.postId)
+    })
+  }
+  ```
+</ParamField>
+
+<ParamField path="context" type="RouteContextFn">
+  Function to create additional context for this route and its children.
+  
+  ```tsx
+  context: ({ params }) => ({
+    postId: params.postId
+  })
+  ```
+</ParamField>
+
+<ParamField path="onCatch" type="(error: Error) => void">
+  Error boundary handler for the route.
+</ParamField>
+
+<ParamField path="onError" type="(error: Error) => void">
+  Called when the route encounters an error.
+</ParamField>
+
+<ParamField path="staticData" type="Record<string, any>">
+  Static metadata for the route (e.g., for generating sitemaps).
+  
+  ```tsx
+  staticData: {
+    title: 'Blog Posts',
+    description: 'View all blog posts'
+  }
+  ```
+</ParamField>
+
+<ParamField path="staleTime" type="number">
+  Time in milliseconds before cached loader data is considered stale.
+  
+  **Default:** `0`
+</ParamField>
+
+<ParamField path="gcTime" type="number">
+  Time in milliseconds before inactive cached data is garbage collected.
+  
+  **Default:** `30 minutes`
+</ParamField>
+
+<ParamField path="preload" type="boolean">
+  Whether to preload this route's data.
+  
+  **Default:** `true`
+</ParamField>
+
+<ParamField path="preloadStaleTime" type="number">
+  Time in milliseconds before preloaded data is considered stale.
+</ParamField>
+
+## Route Class
+
+### Properties
+
+<ResponseField name="id" type="string">
+  The unique identifier for this route.
+</ResponseField>
+
+<ResponseField name="path" type="string">
+  The path pattern for this route.
+</ResponseField>
+
+<ResponseField name="fullPath" type="string">
+  The complete path including all parent paths.
+</ResponseField>
+
+<ResponseField name="options" type="RouteOptions">
+  The configuration options for this route.
+</ResponseField>
+
+### Methods
+
+<ResponseField name="addChildren" type="(children: Route[]) => Route">
+  Add child routes to this route.
+  
+  ```tsx
+  const routeTree = rootRoute.addChildren([
+    indexRoute,
+    postsRoute,
+    aboutRoute
+  ])
+  ```
+</ResponseField>
+
+<ResponseField name="update" type="(options: PartialRouteOptions) => Route">
+  Update route options.
+  
+  ```tsx
+  route.update({
+    component: NewComponent
+  })
+  ```
+</ResponseField>
+
+## Creating Routes
+
+### Root Route
+
+Every router needs a root route:
+
+```tsx
+import { createRootRoute } from '@tanstack/react-router'
+
+const rootRoute = createRootRoute({
+  component: () => (
+    <div>
+      <Header />
+      <Outlet />
+      <Footer />
+    </div>
+  )
+})
+```
+
+### Standard Routes
+
+```tsx
+import { createRoute } from '@tanstack/react-router'
+
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts',
+  loader: async () => {
+    const posts = await fetchPosts()
+    return { posts }
+  },
+  component: () => {
+    const { posts } = postsRoute.useLoaderData()
+    return <PostsList posts={posts} />
+  }
+})
+```
+
+### File-based Routes
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    const post = await fetchPost(params.postId)
+    return { post }
+  },
+  component: PostComponent
+})
+
+function PostComponent() {
+  const { post } = Route.useLoaderData()
+  return <Post post={post} />
+}
+```
+
+## Loader Context
+
+The loader function receives a context object:
+
+<ResponseField name="params" type="Record<string, any>">
+  Path parameters extracted from the URL.
+</ResponseField>
+
+<ResponseField name="search" type="Record<string, any>">
+  Validated search parameters.
+</ResponseField>
+
+<ResponseField name="context" type="AnyContext">
+  Combined context from parent routes and global context.
+</ResponseField>
+
+<ResponseField name="location" type="ParsedLocation">
+  The current location object.
+</ResponseField>
+
+<ResponseField name="abortController" type="AbortController">
+  Controller to cancel ongoing async operations.
+</ResponseField>
+
+<ResponseField name="preload" type="boolean">
+  Whether this loader is being called for preloading.
+</ResponseField>
+
+## Route Hooks
+
+Routes provide hooks for accessing route-specific data:
+
+```tsx
+// Get loader data
+const data = Route.useLoaderData()
+
+// Get route params
+const params = Route.useParams()
+
+// Get search params
+const search = Route.useSearch()
+
+// Get route context
+const context = Route.useRouteContext()
+
+// Navigate from within a route
+const navigate = Route.useNavigate()
+```
+
+## Route Masking
+
+Create virtual routes that display different content:
+
+```tsx
+const maskRoute = createRouteMask({
+  routeTree,
+  from: '/posts/$postId',
+  to: '/p/$postId',
+  params: (prev) => ({
+    postId: prev.postId
+  })
+})
+```
+
+## Example: Complete Route
+
+```tsx
+import { createRoute, redirect } from '@tanstack/react-router'
+import { z } from 'zod'
+
+const postRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts/$postId',
+  
+  // Validate search params
+  validateSearch: z.object({
+    page: z.number().default(1),
+    tab: z.enum(['overview', 'comments']).default('overview')
+  }),
+  
+  // Parse path params
+  params: {
+    parse: (params) => ({
+      postId: Number(params.postId)
+    }),
+    stringify: (params) => ({
+      postId: String(params.postId)
+    })
+  },
+  
+  // Authentication check
+  beforeLoad: async ({ context }) => {
+    if (!context.user) {
+      throw redirect({ to: '/login' })
+    }
+  },
+  
+  // Load data
+  loader: async ({ params, context, abortController }) => {
+    const post = await fetchPost(params.postId, {
+      signal: abortController.signal
+    })
+    
+    if (!post) {
+      throw notFound()
+    }
+    
+    return { post }
+  },
+  
+  // Main component
+  component: PostComponent,
+  
+  // Error handling
+  errorComponent: ({ error }) => (
+    <div>Error loading post: {error.message}</div>
+  ),
+  
+  // Loading state
+  pendingComponent: () => <LoadingSpinner />,
+  
+  // Cache configuration
+  staleTime: 5000,
+  gcTime: 30 * 60 * 1000
+})
+
+function PostComponent() {
+  const { post } = postRoute.useLoaderData()
+  const { tab } = postRoute.useSearch()
+  
+  return (
+    <div>
+      <h1>{post.title}</h1>
+      {tab === 'overview' ? (
+        <PostOverview post={post} />
+      ) : (
+        <PostComments postId={post.id} />
+      )}
+    </div>
+  )
+}
+```

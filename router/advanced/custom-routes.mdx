@@ -1,0 +1,563 @@
+---
+title: Custom Route Types
+description: Learn how to create custom route implementations and extend TanStack Router's routing system
+---
+
+TanStack Router provides a flexible system for creating custom route types and extending the core routing behavior. This allows you to adapt the router to specialized use cases and domain requirements.
+
+## Overview
+
+While most applications use the standard `Route` and `RootRoute` classes, you can create custom route types for:
+
+- Domain-specific route requirements
+- Specialized validation or authorization logic
+- Custom route option types
+- Integration with other libraries or frameworks
+- Type-safe API route definitions
+
+## Route Class Anatomy
+
+Understanding the route class structure is essential for customization:
+
+```tsx
+import { Route } from '@tanstack/react-router'
+
+class Route<
+  TParentRoute,   // Parent route type
+  TPath,          // Path string
+  TFullPath,      // Complete path from root
+  TCustomId,      // Custom route identifier
+  TId,            // Resolved route ID
+  TSearchValidator, // Search param validator
+  TParams,        // Path params
+  // ... more type parameters
+> {
+  // Route configuration
+  id: string
+  path: string
+  fullPath: string
+  options: RouteOptions
+  
+  // Runtime methods
+  useMatch()
+  useSearch()
+  useParams()
+  useLoaderData()
+  // ... more hooks
+}
+```
+
+## Creating Route Factories
+
+Route factories help create routes with shared configuration:
+
+### Basic Route Factory
+
+```tsx
+import { Route, type RouteOptions } from '@tanstack/react-router'
+
+function createAuthenticatedRoute<
+  TParentRoute extends AnyRoute,
+  TPath extends string,
+>(options: RouteOptions<TParentRoute, TPath, /* ... */>) {
+  return new Route({
+    ...options,
+    beforeLoad: async (ctx) => {
+      // Inject authentication check
+      if (!ctx.context.user) {
+        throw redirect({ to: '/login' })
+      }
+      
+      // Call original beforeLoad if provided
+      if (options.beforeLoad) {
+        return options.beforeLoad(ctx)
+      }
+    },
+  })
+}
+
+// Usage
+const dashboardRoute = createAuthenticatedRoute({
+  path: '/dashboard',
+  component: Dashboard,
+})
+```
+
+### Route Factory with Validation
+
+```tsx
+import { zodValidator } from '@tanstack/zod-adapter'
+import { z } from 'zod'
+
+function createPaginatedRoute<
+  TParentRoute extends AnyRoute,
+  TPath extends string,
+>(options: Omit<RouteOptions<TParentRoute, TPath>, 'validateSearch'>) {
+  return new Route({
+    ...options,
+    validateSearch: zodValidator(
+      z.object({
+        page: z.number().int().min(1).optional(),
+        perPage: z.number().int().min(1).max(100).optional(),
+      })
+    ),
+    loaderDeps: (ctx) => ({
+      page: ctx.search.page ?? 1,
+      perPage: ctx.search.perPage ?? 20,
+      ...options.loaderDeps?.(ctx),
+    }),
+  })
+}
+
+// Usage
+const usersRoute = createPaginatedRoute({
+  path: '/users',
+  loader: ({ deps }) => {
+    return fetchUsers({
+      page: deps.page,
+      perPage: deps.perPage,
+    })
+  },
+  component: Users,
+})
+```
+
+## Extending the Route Class
+
+Create custom route classes by extending the base `Route` class:
+
+```tsx
+import { Route, type RouteOptions } from '@tanstack/react-router'
+
+class ApiRoute<
+  TParentRoute extends AnyRoute,
+  TPath extends string,
+  THandler extends (req: Request) => Response,
+> extends Route<TParentRoute, TPath, /* ... */> {
+  handler: THandler
+  
+  constructor(
+    options: RouteOptions<TParentRoute, TPath> & {
+      handler: THandler
+    }
+  ) {
+    super(options)
+    this.handler = options.handler
+  }
+  
+  // Custom method for API routes
+  async handleRequest(req: Request): Promise<Response> {
+    try {
+      return await this.handler(req)
+    } catch (error) {
+      return new Response(JSON.stringify({ error: 'Internal error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+  }
+}
+
+// Usage
+const apiRoute = new ApiRoute({
+  path: '/api/users',
+  handler: async (req) => {
+    const users = await fetchUsers()
+    return new Response(JSON.stringify(users), {
+      headers: { 'Content-Type': 'application/json' },
+    })
+  },
+})
+```
+
+## Custom Route Options
+
+Extend route options for domain-specific needs:
+
+```tsx
+import { type RouteOptions } from '@tanstack/react-router'
+
+interface AnalyticsRouteOptions<TParentRoute, TPath> 
+  extends RouteOptions<TParentRoute, TPath> {
+  analytics: {
+    pageId: string
+    category: string
+    trackScrollDepth?: boolean
+  }
+}
+
+function createAnalyticsRoute<
+  TParentRoute extends AnyRoute,
+  TPath extends string,
+>(options: AnalyticsRouteOptions<TParentRoute, TPath>) {
+  return new Route({
+    ...options,
+    beforeLoad: async (ctx) => {
+      // Track page view
+      analytics.track('page_view', {
+        pageId: options.analytics.pageId,
+        category: options.analytics.category,
+        path: ctx.location.pathname,
+      })
+      
+      if (options.beforeLoad) {
+        return options.beforeLoad(ctx)
+      }
+    },
+  })
+}
+
+// Usage
+const productRoute = createAnalyticsRoute({
+  path: '/products/$id',
+  analytics: {
+    pageId: 'product-detail',
+    category: 'ecommerce',
+    trackScrollDepth: true,
+  },
+  component: ProductDetail,
+})
+```
+
+## Custom Root Routes
+
+Create specialized root routes for different application sections:
+
+```tsx
+import { RootRoute, type RootRouteOptions } from '@tanstack/react-router'
+
+class AdminRootRoute extends RootRoute {
+  constructor(options?: RootRouteOptions) {
+    super({
+      ...options,
+      beforeLoad: async (ctx) => {
+        // Global admin authentication
+        if (!ctx.context.user?.isAdmin) {
+          throw redirect({ to: '/' })
+        }
+        
+        // Add admin-specific context
+        return {
+          adminTools: {
+            log: (message: string) => console.log('[Admin]', message),
+            audit: (action: string) => auditLog(action, ctx.context.user),
+          },
+        }
+      },
+      component: options?.component ?? AdminLayout,
+    })
+  }
+}
+
+// Usage
+const adminRoot = new AdminRootRoute()
+
+const adminRouter = createRouter({
+  routeTree: adminRoot.addChildren([
+    new Route({ path: '/admin/users', component: AdminUsers }),
+    new Route({ path: '/admin/settings', component: AdminSettings }),
+  ]),
+})
+```
+
+## Type-Safe API Routes
+
+Create fully typed API route definitions:
+
+```tsx
+import { Route } from '@tanstack/react-router'
+
+interface ApiRouteDefinition<TInput, TOutput> {
+  path: string
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  input?: (data: TInput) => TInput
+  output?: (data: any) => TOutput
+  handler: (input: TInput) => Promise<TOutput>
+}
+
+function defineApiRoute<TInput, TOutput>(
+  definition: ApiRouteDefinition<TInput, TOutput>
+) {
+  return {
+    ...definition,
+    // Type-safe client
+    client: async (input: TInput): Promise<TOutput> => {
+      const response = await fetch(definition.path, {
+        method: definition.method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(definition.input?.(input) ?? input),
+      })
+      const data = await response.json()
+      return definition.output?.(data) ?? data
+    },
+  }
+}
+
+// Usage
+const createUserApi = defineApiRoute({
+  path: '/api/users',
+  method: 'POST',
+  input: (data: { name: string; email: string }) => data,
+  output: (data: any) => data as { id: string; name: string; email: string },
+  handler: async (input) => {
+    const user = await db.users.create(input)
+    return user
+  },
+})
+
+// Type-safe usage
+const newUser = await createUserApi.client({
+  name: 'John',
+  email: 'john@example.com',
+})
+console.log(newUser.id) // Type-safe!
+```
+
+## Route Hooks Customization
+
+Create custom hooks for your route types:
+
+```tsx
+import { Route } from '@tanstack/react-router'
+
+class DataRoute<TData> extends Route {
+  // Custom hook for this route type
+  useData = <TSelected = TData>(
+    select?: (data: TData) => TSelected
+  ): TSelected => {
+    return this.useLoaderData({
+      select: select as any,
+    })
+  }
+  
+  // Custom hook for refetching
+  useRefetch = () => {
+    const router = useRouter()
+    return React.useCallback(() => {
+      router.invalidate()
+    }, [router])
+  }
+}
+
+// Usage in components
+function MyComponent() {
+  const data = Route.useData()  // Typed as TData
+  const refetch = Route.useRefetch()
+  
+  return (
+    <div>
+      <button onClick={refetch}>Refresh</button>
+      {/* Use data */}
+    </div>
+  )
+}
+```
+
+## Route Middleware Pattern
+
+Implement a middleware pattern for routes:
+
+```tsx
+type RouteMiddleware = (ctx: RouteContext) => RouteContext | Promise<RouteContext>
+
+function createRouteWithMiddleware<TParentRoute, TPath>(
+  options: RouteOptions<TParentRoute, TPath>,
+  middlewares: RouteMiddleware[]
+) {
+  return new Route({
+    ...options,
+    beforeLoad: async (ctx) => {
+      let context = ctx
+      
+      // Run middleware chain
+      for (const middleware of middlewares) {
+        context = await middleware(context)
+      }
+      
+      // Call original beforeLoad
+      if (options.beforeLoad) {
+        const result = await options.beforeLoad(context)
+        if (result) {
+          context = { ...context, ...result }
+        }
+      }
+      
+      return context
+    },
+  })
+}
+
+// Define middleware
+const authMiddleware: RouteMiddleware = async (ctx) => {
+  if (!ctx.context.user) {
+    throw redirect({ to: '/login' })
+  }
+  return ctx
+}
+
+const loggingMiddleware: RouteMiddleware = (ctx) => {
+  console.log('Navigating to:', ctx.location.pathname)
+  return ctx
+}
+
+// Usage
+const protectedRoute = createRouteWithMiddleware(
+  {
+    path: '/dashboard',
+    component: Dashboard,
+  },
+  [loggingMiddleware, authMiddleware]
+)
+```
+
+## Framework-Specific Route Types
+
+Create routes optimized for specific frameworks:
+
+```tsx
+// React Server Components Route
+class RSCRoute extends Route {
+  async serverLoad() {
+    'use server'
+    // Server-only data loading
+    return await fetchServerData()
+  }
+}
+
+// Solid.js Route with Resources
+class SolidRoute extends Route {
+  createResource<T>(fetcher: () => Promise<T>) {
+    return createResource(fetcher)
+  }
+}
+```
+
+## Route Composition
+
+Compose routes from smaller pieces:
+
+```tsx
+function withAuth<TRoute extends AnyRoute>(route: TRoute): TRoute {
+  return {
+    ...route,
+    options: {
+      ...route.options,
+      beforeLoad: async (ctx) => {
+        if (!ctx.context.user) {
+          throw redirect({ to: '/login' })
+        }
+        return route.options.beforeLoad?.(ctx)
+      },
+    },
+  } as TRoute
+}
+
+function withAnalytics<TRoute extends AnyRoute>(
+  route: TRoute,
+  pageId: string
+): TRoute {
+  return {
+    ...route,
+    options: {
+      ...route.options,
+      beforeLoad: async (ctx) => {
+        analytics.track('page_view', { pageId })
+        return route.options.beforeLoad?.(ctx)
+      },
+    },
+  } as TRoute
+}
+
+// Compose multiple enhancers
+const route = withAnalytics(
+  withAuth(
+    createRoute({
+      path: '/dashboard',
+      component: Dashboard,
+    })
+  ),
+  'dashboard'
+)
+```
+
+## Validating Custom Routes
+
+Ensure your custom routes maintain type safety:
+
+```tsx
+import type { AnyRoute, RouteConstraints } from '@tanstack/react-router'
+
+// Ensure your route extends the base route type
+class MyCustomRoute extends Route {
+  // TypeScript will enforce correct implementation
+}
+
+// Validate route tree structure
+function validateRouteTree(route: AnyRoute) {
+  // Runtime validation logic
+  if (!route.id) {
+    throw new Error('Route must have an id')
+  }
+  if (!route.path) {
+    throw new Error('Route must have a path')
+  }
+}
+```
+
+## Best Practices
+
+1. **Extend, don't replace** - Build on top of base Route class
+2. **Maintain type safety** - Ensure custom routes preserve TypeScript types
+3. **Document custom behavior** - Clearly document what your custom routes do
+4. **Test thoroughly** - Custom routes need comprehensive testing
+5. **Keep it simple** - Only customize when standard routes are insufficient
+6. **Use factories** - Prefer factory functions over class extension when possible
+7. **Composition over inheritance** - Use composition patterns for flexibility
+
+## Common Patterns
+
+### Layout Routes
+
+```tsx
+function createLayoutRoute(layout: ComponentType) {
+  return (path: string) => new Route({
+    id: path,
+    path,
+    component: layout,
+  })
+}
+
+const authLayout = createLayoutRoute(AuthLayout)
+const dashboardLayout = createLayoutRoute(DashboardLayout)
+```
+
+### Resource Routes
+
+```tsx
+function createResourceRoute<T>(resourceName: string) {
+  return {
+    list: new Route({
+      path: `/${resourceName}`,
+      component: /* List component */,
+    }),
+    detail: new Route({
+      path: `/${resourceName}/$id`,
+      component: /* Detail component */,
+    }),
+    edit: new Route({
+      path: `/${resourceName}/$id/edit`,
+      component: /* Edit component */,
+    }),
+  }
+}
+
+const userRoutes = createResourceRoute('users')
+const productRoutes = createResourceRoute('products')
+```
+
+## Related
+
+- [Route Configuration](/router/react/route)
+- [Code-Based Routing](/router/guides/code-based-routing)
+- [Type Safety](/router/concepts/type-safety)
+- [Route Guards](/router/guides/route-guards)

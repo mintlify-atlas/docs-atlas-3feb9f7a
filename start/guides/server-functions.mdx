@@ -1,0 +1,364 @@
+---
+title: Server Functions
+---
+
+# Server Functions
+
+Server functions are a core feature of TanStack Start that allow you to write server-side code that can be called directly from your client components. They provide type-safe, serializable communication between client and server.
+
+## What are Server Functions?
+
+Server functions enable you to:
+
+- Execute code exclusively on the server
+- Access server-only resources (databases, file systems, APIs)
+- Maintain type safety across client-server boundaries
+- Avoid exposing sensitive logic or credentials to the client
+
+## Creating a Server Function
+
+Use `createServerFn()` to define a server function:
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+
+export const getUser = createServerFn({ method: 'GET' })
+  .inputValidator((userId: string) => userId)
+  .handler(async ({ data }) => {
+    // This code runs ONLY on the server
+    const user = await db.users.findById(data)
+    return user
+  })
+```
+
+## HTTP Methods
+
+Server functions support two HTTP methods:
+
+### GET Requests
+
+Use `GET` for read operations and data fetching:
+
+```tsx
+export const getPosts = createServerFn({ method: 'GET' }).handler(async () => {
+  const posts = await db.posts.findAll()
+  return posts
+})
+```
+
+### POST Requests
+
+Use `POST` for mutations, form submissions, or when sending complex data:
+
+```tsx
+export const createPost = createServerFn({ method: 'POST' })
+  .inputValidator((data: { title: string; body: string }) => data)
+  .handler(async ({ data }) => {
+    const post = await db.posts.create(data)
+    return post
+  })
+```
+
+## Input Validation
+
+Validate and transform input data using validators:
+
+### Function Validators
+
+```tsx
+export const fetchPost = createServerFn({ method: 'POST' })
+  .inputValidator((postId: string) => {
+    if (!postId) throw new Error('Post ID is required')
+    return postId
+  })
+  .handler(async ({ data }) => {
+    return await db.posts.findById(data)
+  })
+```
+
+### Zod Validators
+
+```tsx
+import { z } from 'zod'
+
+const postSchema = z.object({
+  title: z.string().min(1),
+  body: z.string(),
+})
+
+export const createPost = createServerFn({ method: 'POST' })
+  .inputValidator(postSchema)
+  .handler(async ({ data }) => {
+    // data is fully typed from the schema
+    return await db.posts.create(data)
+  })
+```
+
+## Calling Server Functions
+
+### From Client Components
+
+```tsx
+import { getUser } from '~/utils/users'
+
+function UserProfile() {
+  const [user, setUser] = useState(null)
+
+  const handleFetch = async () => {
+    const userData = await getUser({ data: 'user-123' })
+    setUser(userData)
+  }
+
+  return <button onClick={handleFetch}>Load User</button>
+}
+```
+
+### In Route Loaders
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router'
+import { fetchPost } from '~/utils/posts'
+
+export const Route = createFileRoute('/posts/$postId')({
+  loader: ({ params }) => fetchPost({ data: params.postId }),
+})
+```
+
+### With Custom Options
+
+```tsx
+// With custom headers
+const data = await getUser({
+  data: 'user-123',
+  headers: {
+    'X-Custom-Header': 'value',
+  },
+})
+
+// With AbortSignal
+const controller = new AbortController()
+const data = await getUser({
+  data: 'user-123',
+  signal: controller.signal,
+})
+
+// With custom fetch
+const data = await getUser({
+  data: 'user-123',
+  fetch: customFetch,
+})
+```
+
+## Server Function Context
+
+Access server-only context in your handlers:
+
+```tsx
+export const getServerData = createServerFn({ method: 'GET' }).handler(
+  async ({ context, serverFnMeta, method }) => {
+    // context contains middleware data and request context
+    // serverFnMeta contains function metadata (id, name, filename)
+    // method is the HTTP method used
+
+    console.log('Function called:', serverFnMeta.name)
+    console.log('Method:', method)
+
+    return { success: true }
+  },
+)
+```
+
+## Working with FormData
+
+Server functions can handle FormData directly:
+
+```tsx
+export const uploadFile = createServerFn({ method: 'POST' })
+  .inputValidator((data: FormData) => data)
+  .handler(async ({ data }) => {
+    const file = data.get('file') as File
+    const name = data.get('name') as string
+
+    // Process the file
+    const buffer = await file.arrayBuffer()
+    await fs.writeFile(`/uploads/${name}`, Buffer.from(buffer))
+
+    return { success: true }
+  })
+```
+
+From the client:
+
+```tsx
+function UploadForm() {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
+    await uploadFile({ data: formData })
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input type="file" name="file" />
+      <input type="text" name="name" />
+      <button type="submit">Upload</button>
+    </form>
+  )
+}
+```
+
+## Error Handling
+
+### Throwing Errors
+
+```tsx
+import { notFound } from '@tanstack/react-router'
+
+export const fetchPost = createServerFn({ method: 'GET' })
+  .inputValidator((postId: string) => postId)
+  .handler(async ({ data }) => {
+    const post = await db.posts.findById(data)
+
+    if (!post) {
+      throw notFound()
+    }
+
+    return post
+  })
+```
+
+### Catching Errors
+
+```tsx
+function PostLoader() {
+  try {
+    const post = await fetchPost({ data: 'invalid-id' })
+  } catch (error) {
+    if (error.status === 404) {
+      console.log('Post not found')
+    } else {
+      console.error('Error fetching post:', error)
+    }
+  }
+}
+```
+
+## Advanced Patterns
+
+### Composing Server Functions
+
+```tsx
+const getAuthUser = createServerFn({ method: 'GET' }).handler(async () => {
+  // Get authenticated user
+  return { id: '123', name: 'John' }
+})
+
+const getUserPosts = createServerFn({ method: 'GET' }).handler(async () => {
+  const user = await getAuthUser()
+  return await db.posts.findByUserId(user.id)
+})
+```
+
+### Streaming Responses
+
+Server functions support streaming for large datasets:
+
+```tsx
+export const streamData = createServerFn({ method: 'GET' }).handler(
+  async () => {
+    const stream = new ReadableStream({
+      async start(controller) {
+        for (let i = 0; i < 100; i++) {
+          controller.enqueue({ chunk: i })
+          await new Promise((r) => setTimeout(r, 100))
+        }
+        controller.close()
+      },
+    })
+
+    return stream
+  },
+)
+```
+
+### Deferred Data Loading
+
+Defer slow data fetching to improve initial page load:
+
+```tsx
+export const Route = createFileRoute('/dashboard')({
+  loader: async () => {
+    // Fast data loaded immediately
+    const user = await getUser()
+
+    // Slow data deferred
+    const metrics = getSlowMetrics()
+
+    return {
+      user,
+      metrics, // Promise returned, resolved on client
+    }
+  },
+})
+```
+
+## Best Practices
+
+1. **Choose the Right HTTP Method**
+   - Use `GET` for read operations that can be cached
+   - Use `POST` for mutations or operations with side effects
+
+2. **Validate All Inputs**
+   - Always use input validators to ensure data integrity
+   - Prefer schema validation libraries like Zod for complex types
+
+3. **Keep Functions Focused**
+   - Each server function should do one thing well
+   - Compose smaller functions for complex operations
+
+4. **Handle Errors Gracefully**
+   - Throw appropriate errors for different scenarios
+   - Use router utilities like `notFound()` and `redirect()`
+
+5. **Avoid Over-fetching**
+   - Only return data that the client needs
+   - Use projection/selection in database queries
+
+6. **Consider Performance**
+   - Use deferred loading for slow operations
+   - Implement caching strategies for frequently accessed data
+
+7. **Security First**
+   - Never expose sensitive data or credentials
+   - Validate and sanitize all inputs
+   - Use authentication and authorization checks
+
+## Type Safety
+
+Server functions maintain full type safety:
+
+```tsx
+type User = {
+  id: string
+  name: string
+  email: string
+}
+
+export const getUser = createServerFn({ method: 'GET' })
+  .inputValidator((userId: string) => userId)
+  .handler(async ({ data }): Promise<User> => {
+    // data is typed as string
+    // return type is enforced as User
+    return await db.users.findById(data)
+  })
+
+// In client code:
+const user = await getUser({ data: 'user-123' })
+// user is typed as User
+```
+
+## Next Steps
+
+- Learn about [Data Fetching](./data-fetching) strategies
+- Add [Middleware](./middleware) to your server functions
+- Explore [API Routes](./api-routes) for REST endpoints

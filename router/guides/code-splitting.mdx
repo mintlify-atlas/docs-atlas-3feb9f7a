@@ -1,0 +1,434 @@
+---
+title: Code Splitting
+---
+
+# Code Splitting
+
+Code splitting breaks your application into smaller chunks that are loaded on-demand, reducing initial bundle size and improving performance. TanStack Router provides automatic and manual code splitting strategies.
+
+## Overview
+
+Code splitting benefits:
+- Faster initial page loads
+- Reduced bundle size
+- On-demand loading of route components
+- Better caching and performance
+- Automatic with file-based routing
+
+## Automatic Code Splitting
+
+With file-based routing, TanStack Router automatically code-splits your routes when you enable the plugin:
+
+```tsx vite.config.ts
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import { TanStackRouterPlugin } from '@tanstack/router-plugin/vite'
+
+export default defineConfig({
+  plugins: [
+    TanStackRouterPlugin({
+      autoCodeSplitting: true, // Enable automatic code splitting
+    }),
+    react(),
+  ],
+})
+```
+
+Now each route file is automatically split into its own chunk:
+
+```
+src/routes/
+  __root.tsx       → root.chunk.js
+  index.tsx        → index.chunk.js
+  posts.tsx        → posts.chunk.js
+  posts/$postId.tsx → posts.$postId.chunk.js
+```
+
+## Manual Code Splitting
+
+For code-based routing, use the `.lazy()` method:
+
+### Basic Lazy Routes
+
+```tsx src/main.tsx
+import { createRoute, createRouter } from '@tanstack/react-router'
+
+// Define route with loader (eager)
+export const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'posts',
+  loader: () => fetchPosts(), // Loader runs immediately
+}).lazy(() => import('./posts.lazy').then((d) => d.Route))
+```
+
+```tsx src/posts.lazy.tsx
+import { createLazyRoute, Link, Outlet } from '@tanstack/react-router'
+
+// Define lazy component
+export const Route = createLazyRoute('/posts')({
+  component: PostsComponent,
+})
+
+function PostsComponent() {
+  const posts = Route.useLoaderData()
+  
+  return (
+    <div>
+      <h1>Posts</h1>
+      <ul>
+        {posts.map((post) => (
+          <li key={post.id}>
+            <Link to="/posts/$postId" params={{ postId: post.id }}>
+              {post.title}
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <Outlet />
+    </div>
+  )
+}
+```
+
+### File-Based Lazy Routes
+
+With file-based routing, create `.lazy.tsx` files:
+
+```tsx src/routes/posts.tsx
+import { createFileRoute } from '@tanstack/react-router'
+import { fetchPosts } from '../api'
+
+export const Route = createFileRoute('/posts')({
+  loader: () => fetchPosts(),
+  // Component is in posts.lazy.tsx
+})
+```
+
+```tsx src/routes/posts.lazy.tsx
+import { createLazyFileRoute, Outlet } from '@tanstack/react-router'
+
+export const Route = createLazyFileRoute('/posts')({
+  component: PostsComponent,
+})
+
+function PostsComponent() {
+  const posts = Route.useLoaderData()
+  return <div>{/* ... */}</div>
+}
+```
+
+## Lazy Route Components
+
+Use `lazyRouteComponent` for component-level splitting:
+
+```tsx
+import { createRoute } from '@tanstack/react-router'
+import { lazyRouteComponent } from '@tanstack/react-router'
+
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'posts',
+  loader: () => fetchPosts(),
+  component: lazyRouteComponent(() => import('./PostsComponent')),
+})
+```
+
+```tsx PostsComponent.tsx
+export default function PostsComponent() {
+  return <div>Posts</div>
+}
+```
+
+## Preloading Routes
+
+Preload routes before navigation:
+
+### Intent-Based Preloading
+
+Preload when user shows intent to navigate:
+
+```tsx
+import { createRouter } from '@tanstack/react-router'
+
+const router = createRouter({
+  routeTree,
+  defaultPreload: 'intent', // Preload on hover/focus
+  defaultPreloadDelay: 50,   // Wait 50ms before preloading
+})
+```
+
+### Viewport Preloading
+
+Preload when links enter viewport:
+
+```tsx
+const router = createRouter({
+  routeTree,
+  defaultPreload: 'viewport', // Preload when visible
+})
+```
+
+### Manual Preloading
+
+Preload specific routes programmatically:
+
+```tsx
+import { useRouter } from '@tanstack/react-router'
+
+function Navigation() {
+  const router = useRouter()
+  
+  // Preload on mount
+  useEffect(() => {
+    router.preloadRoute({ to: '/posts' })
+  }, [])
+  
+  return (
+    <nav>
+      <button
+        onMouseEnter={() => {
+          // Preload on hover
+          router.preloadRoute({ to: '/dashboard' })
+        }}
+        onClick={() => navigate({ to: '/dashboard' })}
+      >
+        Dashboard
+      </button>
+    </nav>
+  )
+}
+```
+
+### Link Preloading
+
+Control preloading per link:
+
+```tsx
+import { Link } from '@tanstack/react-router'
+
+<>
+  {/* Preload on hover (default) */}
+  <Link to="/posts" preload="intent">
+    Posts
+  </Link>
+  
+  {/* Preload when visible */}
+  <Link to="/dashboard" preload="viewport">
+    Dashboard
+  </Link>
+  
+  {/* Preload immediately */}
+  <Link to="/settings" preload={true}>
+    Settings
+  </Link>
+  
+  {/* Don't preload */}
+  <Link to="/logout" preload={false}>
+    Logout
+  </Link>
+</>
+```
+
+## Loading States
+
+Show loading UI while lazy components load:
+
+```tsx
+export const Route = createFileRoute('/posts')({
+  loader: () => fetchPosts(),
+  pendingComponent: () => (
+    <div className="flex items-center justify-center p-8">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+    </div>
+  ),
+})
+```
+
+## Suspense Boundaries
+
+Wrap lazy routes in Suspense for better UX:
+
+```tsx src/routes/__root.tsx
+import { createRootRoute, Outlet } from '@tanstack/react-router'
+import { Suspense } from 'react'
+
+export const Route = createRootRoute({
+  component: () => (
+    <Suspense fallback={<div>Loading...</div>}>
+      <Outlet />
+    </Suspense>
+  ),
+})
+```
+
+## Bundle Analysis
+
+Analyze your bundle to identify optimization opportunities:
+
+```bash
+# Install bundle analyzer
+npm install -D rollup-plugin-visualizer
+```
+
+```tsx vite.config.ts
+import { visualizer } from 'rollup-plugin-visualizer'
+
+export default defineConfig({
+  plugins: [
+    TanStackRouterPlugin(),
+    react(),
+    visualizer({
+      open: true,
+      gzipSize: true,
+      brotliSize: true,
+    }),
+  ],
+})
+```
+
+## Lazy Loading Libraries
+
+Split large dependencies:
+
+```tsx
+// ❌ Don't import heavy libraries in route files
+import { Chart } from 'chart.js'
+import { DataGrid } from '@mui/x-data-grid'
+
+// ✅ Lazy load them
+const Chart = lazy(() => import('chart.js').then(m => ({ default: m.Chart })))
+const DataGrid = lazy(() => import('@mui/x-data-grid').then(m => ({ default: m.DataGrid })))
+
+function AnalyticsPage() {
+  return (
+    <Suspense fallback={<div>Loading chart...</div>}>
+      <Chart data={data} />
+    </Suspense>
+  )
+}
+```
+
+## Dynamic Imports
+
+Use dynamic imports for conditional features:
+
+```tsx
+function AdminPanel() {
+  const [AdminTools, setAdminTools] = useState(null)
+  
+  useEffect(() => {
+    // Only load admin tools if user is admin
+    if (user.isAdmin) {
+      import('./AdminTools').then(module => {
+        setAdminTools(() => module.default)
+      })
+    }
+  }, [user.isAdmin])
+  
+  return AdminTools ? <AdminTools /> : null
+}
+```
+
+## Code Splitting Strategies
+
+### Route-Level Splitting
+
+Split by route (recommended):
+
+```
+✅ Good
+- Home chunk (50KB)
+- Dashboard chunk (100KB)
+- Settings chunk (30KB)
+- Profile chunk (40KB)
+```
+
+### Feature-Level Splitting
+
+Split by feature within routes:
+
+```tsx
+function Dashboard() {
+  const [showAnalytics, setShowAnalytics] = useState(false)
+  
+  return (
+    <div>
+      <h1>Dashboard</h1>
+      
+      <button onClick={() => setShowAnalytics(true)}>
+        Show Analytics
+      </button>
+      
+      {showAnalytics && (
+        <Suspense fallback={<div>Loading analytics...</div>}>
+          <LazyAnalytics />
+        </Suspense>
+      )}
+    </div>
+  )
+}
+
+const LazyAnalytics = lazy(() => import('./Analytics'))
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Route-Based Splitting" icon="route">
+    Split at route boundaries for maximum benefit
+  </Card>
+  
+  <Card title="Preload Intelligently" icon="bolt">
+    Use intent-based preloading for likely navigation paths
+  </Card>
+  
+  <Card title="Show Loading States" icon="spinner">
+    Always provide feedback while chunks load
+  </Card>
+  
+  <Card title="Measure Impact" icon="chart-line">
+    Use bundle analysis to verify splitting effectiveness
+  </Card>
+</CardGroup>
+
+<Note>
+  **Balance**: Too much splitting can hurt performance with many HTTP requests. Find the right balance for your app.
+</Note>
+
+<Warning>
+  **Avoid over-splitting**: Don't split tiny components. Only split routes and large features (>20KB).
+</Warning>
+
+## Performance Tips
+
+1. **Split heavy routes**: Focus on routes with large dependencies
+2. **Preload critical routes**: Preload likely navigation targets
+3. **Use suspense**: Provide loading feedback
+4. **Analyze bundles**: Regularly check chunk sizes
+5. **Cache aggressively**: Set proper cache headers for chunks
+
+## Troubleshooting
+
+### Chunks not splitting
+
+- Verify `autoCodeSplitting: true` in plugin config
+- Check that components use `lazy()` or `lazyRouteComponent()`
+- Ensure dynamic imports use `import()` not `require()`
+
+### Slow chunk loading
+
+- Enable preloading for frequently accessed routes
+- Use CDN for faster chunk delivery
+- Check network waterfall in DevTools
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="SSR" href="./ssr">
+    Combine code splitting with server-side rendering
+  </Card>
+  
+  <Card title="Scroll Restoration" href="./scroll-restoration">
+    Maintain scroll position across lazy-loaded routes
+  </Card>
+</CardGroup>

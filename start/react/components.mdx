@@ -1,0 +1,456 @@
+---
+title: Components
+description: Core React components for TanStack Start applications
+---
+
+# Components
+
+TanStack Start provides specialized React components for building full-stack applications.
+
+## StartClient
+
+`StartClient` is the root client component that hydrates your application in the browser.
+
+### Usage
+
+```tsx
+// src/entry-client.tsx
+import { StartClient } from '@tanstack/react-start'
+import { hydrateRoot } from 'react-dom/client'
+
+hydrateRoot(document.getElementById('root')!, <StartClient />)
+```
+
+### How It Works
+
+The `StartClient` component:
+1. Calls `hydrateStart()` to restore the router state from the server
+2. Wraps your application with `RouterProvider`
+3. Uses `Await` to handle the hydration promise
+4. Signals when hydration is complete for cleanup
+
+```tsx
+import { Await, RouterProvider } from '@tanstack/react-router'
+import { hydrateStart } from './hydrateStart'
+
+let hydrationPromise: Promise<AnyRouter> | undefined
+
+export function StartClient() {
+  if (!hydrationPromise) {
+    hydrationPromise = hydrateStart()
+  }
+
+  return (
+    <Await
+      promise={hydrationPromise}
+      children={(router) => <RouterProvider router={router} />}
+    />
+  )
+}
+```
+
+## StartServer
+
+`StartServer` is the root server component used during server-side rendering.
+
+### Usage
+
+```tsx
+// src/entry-server.tsx
+import { StartServer } from '@tanstack/react-start/server'
+import { createMemoryHistory } from '@tanstack/react-router'
+
+export async function render(request: Request) {
+  const router = createRouter()
+  const memoryHistory = createMemoryHistory({
+    initialEntries: [new URL(request.url).pathname],
+  })
+  
+  router.update({ history: memoryHistory })
+  await router.load()
+  
+  return <StartServer router={router} />
+}
+```
+
+### How It Works
+
+`StartServer` is a thin wrapper around `RouterProvider` for the server:
+
+```tsx
+import { RouterProvider } from '@tanstack/react-router'
+import type { AnyRouter } from '@tanstack/router-core'
+
+export function StartServer<TRouter extends AnyRouter>(props: {
+  router: TRouter
+}) {
+  return <RouterProvider router={props.router} />
+}
+```
+
+## Entry Points
+
+### Client Entry
+
+Your client entry file renders the `StartClient` component:
+
+```tsx
+// src/entry-client.tsx
+import { StartClient } from '@tanstack/react-start'
+import { hydrateRoot } from 'react-dom/client'
+
+hydrateRoot(
+  document.getElementById('root')!,
+  <StartClient />
+)
+```
+
+### Server Entry
+
+Your server entry file uses `StartServer` for SSR:
+
+```tsx
+// src/entry-server.tsx
+import { renderToString } from 'react-dom/server'
+import { StartServer } from '@tanstack/react-start/server'
+import { createMemoryHistory } from '@tanstack/react-router'
+import { createRouter } from './router'
+
+export async function render(request: Request) {
+  const router = createRouter()
+  const history = createMemoryHistory({
+    initialEntries: [new URL(request.url).pathname],
+  })
+  
+  router.update({ history })
+  await router.load()
+  
+  const html = renderToString(<StartServer router={router} />)
+  
+  return new Response(html, {
+    headers: { 'Content-Type': 'text/html' },
+  })
+}
+```
+
+## Hydration
+
+The hydration process seamlessly transfers state from server to client.
+
+### hydrateStart
+
+The `hydrateStart` function restores the router instance on the client:
+
+```tsx
+import { hydrateStart } from '@tanstack/react-start/client'
+
+// Called by StartClient
+const router = await hydrateStart()
+```
+
+### Hydration Flow
+
+1. **Server:** Router state is serialized and embedded in the HTML
+2. **Client:** `hydrateStart()` deserializes the state
+3. **Client:** Router is initialized with the restored state
+4. **Client:** React hydrates the DOM without re-rendering
+5. **Cleanup:** Hydration signal triggers any necessary cleanup
+
+## Router Integration
+
+Start components integrate with TanStack Router components:
+
+```tsx
+import {
+  Link,
+  Outlet,
+  RouterProvider,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router'
+import { StartClient } from '@tanstack/react-start'
+
+const rootRoute = createRootRoute({
+  component: () => (
+    <div>
+      <nav>
+        <Link to="/">Home</Link>
+        <Link to="/about">About</Link>
+      </nav>
+      <Outlet />
+    </div>
+  ),
+})
+
+const indexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  component: () => <h1>Home</h1>,
+})
+
+const routeTree = rootRoute.addChildren([indexRoute])
+const router = createRouter({ routeTree })
+
+// In your app
+<StartClient />
+```
+
+## Scripts Component
+
+The `Scripts` component injects client bundles into your HTML:
+
+```tsx
+import { Scripts } from '@tanstack/react-router'
+
+function RootDocument({ children }: { children: React.ReactNode }) {
+  return (
+    <html>
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </head>
+      <body>
+        {children}
+        <Scripts />
+      </body>
+    </html>
+  )
+}
+```
+
+## Head Management
+
+Manage document head with `HeadContent`:
+
+```tsx
+import { HeadContent, createRootRoute } from '@tanstack/react-router'
+
+export const Route = createRootRoute({
+  head: () => ({
+    meta: [
+      { charSet: 'utf-8' },
+      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+      { name: 'description', content: 'My TanStack Start app' },
+    ],
+    links: [
+      { rel: 'stylesheet', href: '/styles/app.css' },
+      { rel: 'icon', href: '/favicon.ico' },
+    ],
+  }),
+  component: () => (
+    <html>
+      <head>
+        <HeadContent />
+      </head>
+      <body>
+        <Outlet />
+      </body>
+    </html>
+  ),
+})
+```
+
+## Streaming
+
+Stream HTML and data to the client:
+
+```tsx
+import { renderToPipeableStream } from 'react-dom/server'
+import { StartServer } from '@tanstack/react-start/server'
+
+export async function render(request: Request) {
+  const router = createRouter()
+  // ... setup router
+  
+  return new Promise((resolve) => {
+    const { pipe } = renderToPipeableStream(
+      <StartServer router={router} />,
+      {
+        onShellReady() {
+          const stream = new TransformStream()
+          pipe(stream.writable)
+          resolve(new Response(stream.readable, {
+            headers: { 'Content-Type': 'text/html' },
+          }))
+        },
+      }
+    )
+  })
+}
+```
+
+## Deferred Data
+
+Use `Await` and `Suspense` for deferred data loading:
+
+```tsx
+import { Suspense } from 'react'
+import { Await, createFileRoute } from '@tanstack/react-router'
+import { fetchData } from '~/utils/data'
+
+export const Route = createFileRoute('/data')({  
+  loader: async () => ({
+    // Deferred - resolves after initial render
+    deferredData: fetchData(),
+  }),
+  component: DataPage,
+})
+
+function DataPage() {
+  const { deferredData } = Route.useLoaderData()
+  
+  return (
+    <Suspense fallback={<div>Loading data...</div>}>
+      <Await promise={deferredData}>
+        {(data) => <div>{data}</div>}
+      </Await>
+    </Suspense>
+  )
+}
+```
+
+## Error Boundaries
+
+Handle errors with error boundaries:
+
+```tsx
+import { ErrorComponent, createRootRoute } from '@tanstack/react-router'
+
+export const Route = createRootRoute({
+  errorComponent: ({ error }) => (
+    <div>
+      <h1>Something went wrong</h1>
+      <pre>{error.message}</pre>
+    </div>
+  ),
+})
+```
+
+## Not Found
+
+Handle 404 errors:
+
+```tsx
+import { createRootRoute } from '@tanstack/react-router'
+
+export const Route = createRootRoute({
+  notFoundComponent: () => (
+    <div>
+      <h1>404 - Page Not Found</h1>
+      <Link to="/">Go Home</Link>
+    </div>
+  ),
+})
+```
+
+## Best Practices
+
+### Single Root Component
+
+Use `StartClient` once at your application root:
+
+```tsx
+// ✅ Good
+hydrateRoot(document.getElementById('root')!, <StartClient />)
+
+// ❌ Bad - don't nest StartClient
+function App() {
+  return <StartClient /> // Already rendered at root
+}
+```
+
+### Server vs Client Imports
+
+Use the correct import for each environment:
+
+```tsx
+// Client entry
+import { StartClient } from '@tanstack/react-start'
+
+// Server entry
+import { StartServer } from '@tanstack/react-start/server'
+```
+
+### Document Structure
+
+Always render a complete HTML document:
+
+```tsx
+function RootDocument({ children }: { children: React.ReactNode }) {
+  return (
+    <html>
+      <head>
+        <HeadContent />
+      </head>
+      <body>
+        {children}
+        <Scripts />
+      </body>
+    </html>
+  )
+}
+```
+
+### Hydration Mismatch
+
+Avoid hydration mismatches by ensuring server and client render the same content:
+
+```tsx
+// ❌ Bad - will cause hydration mismatch
+function Component() {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+  return <div>{mounted ? 'Client' : 'Server'}</div>
+}
+
+// ✅ Good - consistent across server and client
+function Component() {
+  return <div>Consistent content</div>
+}
+```
+
+## API Reference
+
+### StartClient
+
+Client-side root component.
+
+**Props:** None
+
+**Example:**
+```tsx
+import { StartClient } from '@tanstack/react-start'
+hydrateRoot(document.getElementById('root')!, <StartClient />)
+```
+
+### StartServer
+
+Server-side root component.
+
+**Props:**
+- `router`: `AnyRouter` - Router instance
+
+**Example:**
+```tsx
+import { StartServer } from '@tanstack/react-start/server'
+<StartServer router={router} />
+```
+
+### hydrateStart
+
+Hydrates the router on the client.
+
+**Returns:** `Promise<AnyRouter>`
+
+**Example:**
+```tsx
+import { hydrateStart } from '@tanstack/react-start/client'
+const router = await hydrateStart()
+```
+
+## Related
+
+- [Server Functions](/start/react/server-functions) - Creating server functions
+- [Client Functions](/start/react/client-functions) - Client-side utilities
+- [Router Documentation](https://tanstack.com/router) - TanStack Router

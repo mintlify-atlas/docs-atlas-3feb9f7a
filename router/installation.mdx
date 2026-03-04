@@ -1,0 +1,538 @@
+---
+title: Installation
+description: Install TanStack Router in your React, Solid, or Vue application using npm, yarn, pnpm, or bun.
+---
+
+# Installation
+
+TanStack Router can be installed in React, Solid, or Vue applications. Choose your framework and package manager to get started.
+
+## Prerequisites
+
+Before installing TanStack Router, ensure you have:
+
+- **Node.js** 20.19 or higher
+- A supported framework installed:
+  - React 18.0.0 or higher (or React 19+)
+  - Solid.js 1.9.10 or higher  
+  - Vue 3.3.0 or higher
+
+Source: packages/react-router/package.json:117-119, packages/solid-router/package.json:124-126, packages/vue-router/package.json:93-95
+
+## React Installation
+
+Install TanStack Router for React applications.
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install @tanstack/react-router
+    ```
+  </Tab>
+  
+  <Tab title="pnpm">
+    ```bash
+    pnpm add @tanstack/react-router
+    ```
+  </Tab>
+  
+  <Tab title="yarn">
+    ```bash
+    yarn add @tanstack/react-router
+    ```
+  </Tab>
+  
+  <Tab title="bun">
+    ```bash
+    bun add @tanstack/react-router
+    ```
+  </Tab>
+</Tabs>
+
+### Optional: DevTools
+
+Install the DevTools package for debugging and development:
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install --save-dev @tanstack/react-router-devtools
+    ```
+  </Tab>
+  
+  <Tab title="pnpm">
+    ```bash
+    pnpm add -D @tanstack/react-router-devtools
+    ```
+  </Tab>
+  
+  <Tab title="yarn">
+    ```bash
+    yarn add --dev @tanstack/react-router-devtools
+    ```
+  </Tab>
+  
+  <Tab title="bun">
+    ```bash
+    bun add --dev @tanstack/react-router-devtools
+    ```
+  </Tab>
+</Tabs>
+
+### Optional: Router Plugin (File-Based Routing)
+
+For file-based routing with automatic route generation, install the router plugin:
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install --save-dev @tanstack/router-plugin
+    ```
+  </Tab>
+  
+  <Tab title="pnpm">
+    ```bash
+    pnpm add -D @tanstack/router-plugin
+    ```
+  </Tab>
+  
+  <Tab title="yarn">
+    ```bash
+    yarn add --dev @tanstack/router-plugin
+    ```
+  </Tab>
+  
+  <Tab title="bun">
+    ```bash
+    bun add --dev @tanstack/router-plugin
+    ```
+  </Tab>
+</Tabs>
+
+Source: examples/react/quickstart-file-based/package.json:15
+
+#### Configure Vite Plugin
+
+If using Vite, add the plugin to your `vite.config.ts`:
+
+```typescript
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
+
+export default defineConfig({
+  plugins: [
+    tanstackRouter({ target: 'react', autoCodeSplitting: true }),
+    react(),
+  ],
+})
+```
+
+Source: examples/react/quickstart-file-based/vite.config.js:1-13
+
+<Note>
+  The router plugin supports Vite, Webpack, Rspack, and ESBuild. See the plugin documentation for configuration options for other bundlers.
+</Note>
+
+## Solid Installation
+
+Install TanStack Router for Solid.js applications.
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install @tanstack/solid-router
+    ```
+  </Tab>
+  
+  <Tab title="pnpm">
+    ```bash
+    pnpm add @tanstack/solid-router
+    ```
+  </Tab>
+  
+  <Tab title="yarn">
+    ```bash
+    yarn add @tanstack/solid-router
+    ```
+  </Tab>
+  
+  <Tab title="bun">
+    ```bash
+    bun add @tanstack/solid-router
+    ```
+  </Tab>
+</Tabs>
+
+### Optional: DevTools
+
+Install the Solid DevTools package:
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install --save-dev @tanstack/solid-router-devtools
+    ```
+  </Tab>
+  
+  <Tab title="pnpm">
+    ```bash
+    pnpm add -D @tanstack/solid-router-devtools
+    ```
+  </Tab>
+  
+  <Tab title="yarn">
+    ```bash
+    yarn add --dev @tanstack/solid-router-devtools
+    ```
+  </Tab>
+  
+  <Tab title="bun">
+    ```bash
+    bun add --dev @tanstack/solid-router-devtools
+    ```
+  </Tab>
+</Tabs>
+
+Source: examples/solid/basic/package.json:13-14
+
+### Optional: Router Plugin (File-Based Routing)
+
+For file-based routing, install the router plugin:
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install --save-dev @tanstack/router-plugin
+    ```
+  </Tab>
+  
+  <Tab title="pnpm">
+    ```bash
+    pnpm add -D @tanstack/router-plugin
+    ```
+  </Tab>
+  
+  <Tab title="yarn">
+    ```bash
+    yarn add --dev @tanstack/router-plugin
+    ```
+  </Tab>
+  
+  <Tab title="bun">
+    ```bash
+    bun add --dev @tanstack/router-plugin
+    ```
+  </Tab>
+</Tabs>
+
+#### Configure Vite Plugin
+
+Add the plugin to your `vite.config.ts`:
+
+```typescript
+import { defineConfig } from 'vite'
+import solid from 'vite-plugin-solid'
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
+
+export default defineConfig({
+  plugins: [
+    tanstackRouter({ target: 'solid', autoCodeSplitting: true }),
+    solid(),
+  ],
+})
+```
+
+## Vue Installation
+
+Install TanStack Router for Vue applications.
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install @tanstack/vue-router
+    ```
+  </Tab>
+  
+  <Tab title="pnpm">
+    ```bash
+    pnpm add @tanstack/vue-router
+    ```
+  </Tab>
+  
+  <Tab title="yarn">
+    ```bash
+    yarn add @tanstack/vue-router
+    ```
+  </Tab>
+  
+  <Tab title="bun">
+    ```bash
+    bun add @tanstack/vue-router
+    ```
+  </Tab>
+</Tabs>
+
+### Optional: DevTools
+
+Install the Vue DevTools package:
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install --save-dev @tanstack/vue-router-devtools
+    ```
+  </Tab>
+  
+  <Tab title="pnpm">
+    ```bash
+    pnpm add -D @tanstack/vue-router-devtools
+    ```
+  </Tab>
+  
+  <Tab title="yarn">
+    ```bash
+    yarn add --dev @tanstack/vue-router-devtools
+    ```
+  </Tab>
+  
+  <Tab title="bun">
+    ```bash
+    bun add --dev @tanstack/vue-router-devtools
+    ```
+  </Tab>
+</Tabs>
+
+### Optional: Router Plugin (File-Based Routing)
+
+For file-based routing, install the router plugin:
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install --save-dev @tanstack/router-plugin
+    ```
+  </Tab>
+  
+  <Tab title="pnpm">
+    ```bash
+    pnpm add -D @tanstack/router-plugin
+    ```
+  </Tab>
+  
+  <Tab title="yarn">
+    ```bash
+    yarn add --dev @tanstack/router-plugin
+    ```
+  </Tab>
+  
+  <Tab title="bun">
+    ```bash
+    bun add --dev @tanstack/router-plugin
+    ```
+  </Tab>
+</Tabs>
+
+#### Configure Vite Plugin
+
+Add the plugin to your `vite.config.ts`:
+
+```typescript
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
+
+export default defineConfig({
+  plugins: [
+    tanstackRouter({ target: 'vue', autoCodeSplitting: true }),
+    vue(),
+  ],
+})
+```
+
+## Package Versions
+
+The current stable version of TanStack Router is:
+
+<Note>
+  **v1.163.3** - All framework packages use the same version number for consistency.
+</Note>
+
+Source: packages/react-router/package.json:3, packages/solid-router/package.json:3, packages/vue-router/package.json:3
+
+## TypeScript Configuration
+
+TanStack Router requires TypeScript for the best experience. Ensure your `tsconfig.json` includes:
+
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx" // or "preserve" for Vue/Solid
+  }
+}
+```
+
+<Warning>
+  TanStack Router works best with TypeScript's strict mode enabled. Some features like type-safe navigation require strict type checking.
+</Warning>
+
+## Validation Libraries (Optional)
+
+TanStack Router supports type-safe search parameter validation with popular validation libraries:
+
+### Zod
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install zod @tanstack/zod-adapter
+    ```
+  </Tab>
+  
+  <Tab title="pnpm">
+    ```bash
+    pnpm add zod @tanstack/zod-adapter
+    ```
+  </Tab>
+  
+  <Tab title="yarn">
+    ```bash
+    yarn add zod @tanstack/zod-adapter
+    ```
+  </Tab>
+  
+  <Tab title="bun">
+    ```bash
+    bun add zod @tanstack/zod-adapter
+    ```
+  </Tab>
+</Tabs>
+
+### Valibot
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install valibot @tanstack/valibot-adapter
+    ```
+  </Tab>
+  
+  <Tab title="pnpm">
+    ```bash
+    pnpm add valibot @tanstack/valibot-adapter
+    ```
+  </Tab>
+  
+  <Tab title="yarn">
+    ```bash
+    yarn add valibot @tanstack/valibot-adapter
+    ```
+  </Tab>
+  
+  <Tab title="bun">
+    ```bash
+    bun add valibot @tanstack/valibot-adapter
+    ```
+  </Tab>
+</Tabs>
+
+### ArkType
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install arktype @tanstack/arktype-adapter
+    ```
+  </Tab>
+  
+  <Tab title="pnpm">
+    ```bash
+    pnpm add arktype @tanstack/arktype-adapter
+    ```
+  </Tab>
+  
+  <Tab title="yarn">
+    ```bash
+    yarn add arktype @tanstack/arktype-adapter
+    ```
+  </Tab>
+  
+  <Tab title="bun">
+    ```bash
+    bun add arktype @tanstack/arktype-adapter
+    ```
+  </Tab>
+</Tabs>
+
+## Verify Installation
+
+To verify your installation is successful, create a simple test file:
+
+<Tabs>
+  <Tab title="React">
+    ```tsx
+    import { createRouter } from '@tanstack/react-router'
+    
+    console.log('TanStack Router installed successfully!')
+    ```
+  </Tab>
+  
+  <Tab title="Solid">
+    ```tsx
+    import { createRouter } from '@tanstack/solid-router'
+    
+    console.log('TanStack Router installed successfully!')
+    ```
+  </Tab>
+  
+  <Tab title="Vue">
+    ```tsx
+    import { createRouter } from '@tanstack/vue-router'
+    
+    console.log('TanStack Router installed successfully!')
+    ```
+  </Tab>
+</Tabs>
+
+If there are no import errors, your installation is complete!
+
+## Next Steps
+
+Now that you have TanStack Router installed, you're ready to build your first application:
+
+<Card title="Quick Start Guide" icon="rocket" href="/router/quickstart">
+  Follow our step-by-step guide to create your first router
+</Card>
+
+## Troubleshooting
+
+### Module Not Found
+
+If you see module resolution errors, ensure:
+
+1. You've installed the correct package for your framework
+2. Your `tsconfig.json` has `moduleResolution` set to `bundler` or `node16`
+3. You've restarted your development server after installation
+
+### Type Errors
+
+If TypeScript shows errors:
+
+1. Ensure you're using TypeScript 5.4 or higher
+2. Enable `strict` mode in your `tsconfig.json`
+3. Make sure you've registered your router type (covered in the Quick Start)
+
+### Plugin Issues
+
+If the router plugin isn't working:
+
+1. Verify the plugin is listed **before** your framework plugin in the Vite config
+2. Check that the `target` option matches your framework
+3. Try clearing your build cache and restarting the dev server
+
+<Note>
+  For more help, visit our [GitHub Discussions](https://github.com/TanStack/router/discussions) or join our [Discord community](https://discord.com/invite/WrRKjPJ).
+</Note>

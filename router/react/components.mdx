@@ -1,0 +1,650 @@
+---
+title: Components
+---
+
+TanStack Router provides several built-in components for rendering routes, handling navigation, and managing errors.
+
+## Core Components
+
+### `Outlet`
+
+Renders the child route's component in a parent route layout.
+
+```tsx
+import { Outlet } from '@tanstack/react-router'
+
+const rootRoute = createRootRoute({
+  component: () => (
+    <div>
+      <header>My App Header</header>
+      <main>
+        <Outlet /> {/* Child routes render here */}
+      </main>
+      <footer>My App Footer</footer>
+    </div>
+  ),
+})
+```
+
+The `Outlet` component is the React Router equivalent of rendering child routes. It should be placed in parent route components where you want child routes to appear.
+
+### `RouterProvider`
+
+Top-level component that renders the active route matches and provides the router to the React tree.
+
+```tsx
+import { RouterProvider } from '@tanstack/react-router'
+
+function App() {
+  return <RouterProvider router={router} />
+}
+```
+
+**Source:** `packages/react-router/src/RouterProvider.tsx:58-67`
+
+<ParamField path="router" type="TRouter" required>
+  The router instance created with `createRouter`.
+</ParamField>
+
+<ParamField path="...rest" type="Partial<RouterOptions>">
+  Additional options to update the router. Accepts same options as `createRouter`.
+</ParamField>
+
+## Navigation Components
+
+### `Link`
+
+Strongly-typed anchor component for declarative navigation.
+
+```tsx
+import { Link } from '@tanstack/react-router'
+
+<Link to="/posts/$postId" params={{ postId: '123' }}>
+  View Post
+</Link>
+```
+
+See the [Link API documentation](./link) for full details.
+
+### `Navigate`
+
+Component that triggers navigation when rendered.
+
+```tsx
+import { Navigate } from '@tanstack/react-router'
+
+function RedirectToLogin() {
+  return <Navigate to="/login" replace />
+}
+```
+
+**Source:** `packages/react-router/src/useNavigate.tsx:54-78`
+
+<ParamField path="to" type="string" required>
+  Destination route path.
+</ParamField>
+
+<ParamField path="params" type="TParams">
+  Path parameters for the destination.
+</ParamField>
+
+<ParamField path="search" type="TSearch">
+  Search parameters for the destination.
+</ParamField>
+
+<ParamField path="hash" type="string">
+  URL hash for the destination.
+</ParamField>
+
+<ParamField path="replace" type="boolean" default="false">
+  Replace current history entry instead of pushing.
+</ParamField>
+
+<ParamField path="resetScroll" type="boolean" default="true">
+  Reset scroll position on navigation.
+</ParamField>
+
+<ResponseField name="returns" type="null">
+  Renders nothing, navigation happens in an effect.
+</ResponseField>
+
+## Matching Components
+
+### `MatchRoute`
+
+Component that conditionally renders its children based on whether a route matches.
+
+```tsx
+import { MatchRoute } from '@tanstack/react-router'
+
+function Nav() {
+  return (
+    <nav>
+      <MatchRoute to="/posts" params={{ postId: '123' }}>
+        {(params) => <span>Viewing post {params?.postId}</span>}
+      </MatchRoute>
+      
+      <MatchRoute to="/settings">
+        <SettingsIndicator />
+      </MatchRoute>
+    </nav>
+  )
+}
+```
+
+**Source:** `packages/react-router/src/Matches.tsx:201-216`
+
+<ParamField path="to" type="string" required>
+  Route path to match against.
+</ParamField>
+
+<ParamField path="params" type="TParams">
+  Specific params to match.
+</ParamField>
+
+<ParamField path="search" type="TSearch">
+  Specific search params to match.
+</ParamField>
+
+<ParamField path="fuzzy" type="boolean" default="false">
+  Allow fuzzy matching (partial path match).
+</ParamField>
+
+<ParamField path="pending" type="boolean" default="false">
+  Match against pending location instead of current.
+</ParamField>
+
+<ParamField path="caseSensitive" type="boolean" default="false">
+  Match paths case-sensitively.
+</ParamField>
+
+<ParamField path="children" type="React.ReactNode | (params) => React.ReactNode">
+  Content to render when matched. If a function, receives the matched params.
+</ParamField>
+
+## Error Handling Components
+
+### `CatchBoundary`
+
+Internal error boundary component used by routes to catch rendering errors.
+
+```tsx
+import { CatchBoundary, ErrorComponent } from '@tanstack/react-router'
+
+function MyRoute() {
+  return (
+    <CatchBoundary
+      getResetKey={() => resetKey}
+      errorComponent={MyErrorComponent}
+      onCatch={(error, errorInfo) => {
+        logError(error, errorInfo)
+      }}
+    >
+      <RouteContent />
+    </CatchBoundary>
+  )
+}
+```
+
+**Source:** `packages/react-router/src/CatchBoundary.tsx:5-29`
+
+<ParamField path="getResetKey" type="() => number | string" required>
+  Function returning a key that resets the error boundary when changed.
+</ParamField>
+
+<ParamField path="errorComponent" type="ErrorRouteComponent" default="ErrorComponent">
+  Component to render when an error is caught.
+</ParamField>
+
+<ParamField path="onCatch" type="(error: Error, errorInfo: ErrorInfo) => void">
+  Callback when an error is caught.
+</ParamField>
+
+<ParamField path="children" type="React.ReactNode" required>
+  Content to render (protected by the boundary).
+</ParamField>
+
+### `ErrorComponent`
+
+Default error component that displays error information.
+
+```tsx
+import { ErrorComponent } from '@tanstack/react-router'
+
+function MyErrorComponent({ error, reset }) {
+  return <ErrorComponent error={error} />
+}
+```
+
+**Source:** `packages/react-router/src/CatchBoundary.tsx:80-121`
+
+<ParamField path="error" type="Error" required>
+  The error that was caught.
+</ParamField>
+
+<ParamField path="reset" type="() => void">
+  Function to reset the error boundary and retry.
+</ParamField>
+
+The default ErrorComponent shows:
+- Error message
+- Toggle to show/hide details
+- In development: full error details
+- In production: minimal error message
+
+### `CatchNotFound`
+
+Error boundary specifically for handling not-found errors.
+
+```tsx
+import { CatchNotFound } from '@tanstack/react-router'
+
+function Layout() {
+  return (
+    <CatchNotFound
+      fallback={(error) => (
+        <div>
+          <h1>404 - Page Not Found</h1>
+          <p>Path: {error.pathname}</p>
+        </div>
+      )}
+    >
+      <Outlet />
+    </CatchNotFound>
+  )
+}
+```
+
+**Source:** `packages/react-router/src/not-found.tsx:8-39`
+
+<ParamField path="fallback" type="(error: NotFoundError) => React.ReactElement">
+  Component to render when a not-found error is caught.
+</ParamField>
+
+<ParamField path="onCatch" type="(error: Error, errorInfo: ErrorInfo) => void">
+  Callback when a not-found error is caught.
+</ParamField>
+
+<ParamField path="children" type="React.ReactNode" required>
+  Content to render (protected by the boundary).
+</ParamField>
+
+## Blocker Components
+
+### `Block`
+
+Component that blocks navigation based on a condition.
+
+```tsx
+import { Block } from '@tanstack/react-router'
+
+function EditForm() {
+  const [isDirty, setIsDirty] = useState(false)
+  
+  return (
+    <>
+      <Block
+        shouldBlockFn={({ current, next }) => {
+          return isDirty && current.routeId !== next.routeId
+        }}
+        withResolver
+      >
+        {(resolver) => (
+          resolver.status === 'blocked' && (
+            <ConfirmDialog
+              onConfirm={resolver.proceed}
+              onCancel={resolver.reset}
+            />
+          )
+        )}
+      </Block>
+      
+      <form>...</form>
+    </>
+  )
+}
+```
+
+**Source:** `packages/react-router/src/useBlocker.tsx:286-306`
+
+<ParamField path="shouldBlockFn" type="(args: BlockerArgs) => boolean | Promise<boolean>" required>
+  Function to determine if navigation should be blocked.
+</ParamField>
+
+<ParamField path="enableBeforeUnload" type="boolean | (() => boolean)" default="true">
+  Enable browser's beforeunload warning.
+</ParamField>
+
+<ParamField path="disabled" type="boolean" default="false">
+  Disable the blocker.
+</ParamField>
+
+<ParamField path="withResolver" type="boolean" default="false">
+  Provide resolver to children for handling blocked navigation.
+</ParamField>
+
+<ParamField path="children" type="React.ReactNode | (resolver) => React.ReactNode">
+  Content to render. If a function and withResolver is true, receives blocker resolver.
+</ParamField>
+
+## Usage Examples
+
+### Layout with Outlet
+
+```tsx
+import { createRootRoute, Outlet } from '@tanstack/react-router'
+
+const rootRoute = createRootRoute({
+  component: () => (
+    <div>
+      <nav>
+        <Link to="/">Home</Link>
+        <Link to="/about">About</Link>
+        <Link to="/posts">Posts</Link>
+      </nav>
+      
+      <main>
+        <Outlet /> {/* Child routes render here */}
+      </main>
+      
+      <footer>
+        © 2024 My App
+      </footer>
+    </div>
+  ),
+})
+```
+
+### Conditional Navigation
+
+```tsx
+function ProtectedRoute() {
+  const { isAuthenticated } = useAuth()
+  
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
+  
+  return <DashboardContent />
+}
+```
+
+### Conditional Rendering
+
+```tsx
+function Header() {
+  return (
+    <header>
+      <Logo />
+      
+      <MatchRoute to="/posts" fuzzy>
+        <PostsNavigation />
+      </MatchRoute>
+      
+      <MatchRoute to="/settings" fuzzy>
+        <SettingsNavigation />
+      </MatchRoute>
+      
+      <MatchRoute to="/admin" fuzzy>
+        {(params) => <AdminBadge />}
+      </MatchRoute>
+    </header>
+  )
+}
+```
+
+### Custom Error Handling
+
+```tsx
+import { CatchBoundary } from '@tanstack/react-router'
+
+function CustomErrorComponent({ error, reset }) {
+  return (
+    <div className="error-container">
+      <h1>Oops! Something went wrong</h1>
+      <details>
+        <summary>Error Details</summary>
+        <pre>{error.message}</pre>
+        {error.stack && <pre>{error.stack}</pre>}
+      </details>
+      <button onClick={reset}>Try Again</button>
+      <Link to="/">Go Home</Link>
+    </div>
+  )
+}
+
+const rootRoute = createRootRoute({
+  component: () => (
+    <CatchBoundary
+      getResetKey={() => Date.now()}
+      errorComponent={CustomErrorComponent}
+      onCatch={(error) => {
+        // Log to error tracking service
+        logError(error)
+      }}
+    >
+      <Outlet />
+    </CatchBoundary>
+  ),
+})
+```
+
+### Not Found Handling
+
+```tsx
+import { CatchNotFound } from '@tanstack/react-router'
+
+function Layout() {
+  return (
+    <div>
+      <Header />
+      <CatchNotFound
+        fallback={(error) => (
+          <div className="not-found">
+            <h1>404 - Page Not Found</h1>
+            <p>The page <code>{error.pathname}</code> does not exist.</p>
+            <Link to="/">Return Home</Link>
+          </div>
+        )}
+      >
+        <Outlet />
+      </CatchNotFound>
+      <Footer />
+    </div>
+  )
+}
+```
+
+### Form with Navigation Blocker
+
+```tsx
+import { Block } from '@tanstack/react-router'
+
+function ArticleEditor() {
+  const [content, setContent] = useState('')
+  const [saved, setSaved] = useState(true)
+  
+  const handleChange = (value) => {
+    setContent(value)
+    setSaved(false)
+  }
+  
+  const handleSave = async () => {
+    await saveArticle(content)
+    setSaved(true)
+  }
+  
+  return (
+    <>
+      <Block
+        shouldBlockFn={() => !saved}
+        enableBeforeUnload
+        withResolver
+      >
+        {(resolver) => (
+          resolver.status === 'blocked' && (
+            <Modal>
+              <h2>Unsaved Changes</h2>
+              <p>You have unsaved changes. Are you sure you want to leave?</p>
+              <button onClick={handleSave}>
+                Save and Leave
+              </button>
+              <button onClick={resolver.proceed}>
+                Leave Without Saving
+              </button>
+              <button onClick={resolver.reset}>
+                Stay on Page
+              </button>
+            </Modal>
+          )
+        )}
+      </Block>
+      
+      <Editor value={content} onChange={handleChange} />
+      <button onClick={handleSave} disabled={saved}>
+        {saved ? 'Saved' : 'Save'}
+      </button>
+    </>
+  )
+}
+```
+
+### Multi-Level Layout
+
+```tsx
+const rootRoute = createRootRoute({
+  component: () => (
+    <div>
+      <GlobalHeader />
+      <Outlet />
+      <GlobalFooter />
+    </div>
+  ),
+})
+
+const dashboardRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/dashboard',
+  component: () => (
+    <div>
+      <DashboardSidebar />
+      <main>
+        <Outlet /> {/* Nested dashboard routes */}
+      </main>
+    </div>
+  ),
+})
+
+const settingsRoute = createRoute({
+  getParentRoute: () => dashboardRoute,
+  path: '/settings',
+  component: () => (
+    <div>
+      <SettingsTabs />
+      <Outlet /> {/* Settings sub-routes */}
+    </div>
+  ),
+})
+```
+
+## Best Practices
+
+### Always Use Outlet
+
+Every parent route that has children should render an `Outlet`:
+
+```tsx
+// ✅ Good
+const layoutRoute = createRoute({
+  component: () => (
+    <div>
+      <Header />
+      <Outlet /> {/* Children render here */}
+      <Footer />
+    </div>
+  ),
+})
+
+// ❌ Bad - children won't render
+const layoutRoute = createRoute({
+  component: () => (
+    <div>
+      <Header />
+      {/* Missing Outlet! */}
+      <Footer />
+    </div>
+  ),
+})
+```
+
+### Error Boundaries at Strategic Levels
+
+Place error boundaries at logical boundaries in your app:
+
+```tsx
+// Root level - catches all errors
+const rootRoute = createRootRoute({
+  errorComponent: GlobalErrorComponent,
+})
+
+// Feature level - catches feature-specific errors
+const dashboardRoute = createRoute({
+  path: '/dashboard',
+  errorComponent: DashboardErrorComponent,
+})
+
+// Route level - catches route-specific errors
+const settingsRoute = createRoute({
+  path: '/settings',
+  errorComponent: SettingsErrorComponent,
+})
+```
+
+### Use Navigate for Redirects
+
+Use the Navigate component for declarative redirects:
+
+```tsx
+function ProtectedPage() {
+  const { user } = useAuth()
+  
+  if (!user) {
+    return (
+      <Navigate 
+        to="/login" 
+        search={{ redirect: window.location.pathname }}
+        replace
+      />
+    )
+  }
+  
+  return <PageContent />
+}
+```
+
+### Combine MatchRoute with Logic
+
+Use MatchRoute for conditional UI based on routes:
+
+```tsx
+function Layout() {
+  const matchRoute = useMatchRoute()
+  const showSidebar = matchRoute({ to: '/dashboard', fuzzy: true })
+  
+  return (
+    <div>
+      {showSidebar && <Sidebar />}
+      <main>
+        <Outlet />
+      </main>
+    </div>
+  )
+}
+```
+
+## See Also
+
+- [Router API](./router)
+- [Route API](./route)
+- [Link API](./link)
+- [Hooks API](./hooks)

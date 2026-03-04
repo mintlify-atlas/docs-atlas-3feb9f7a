@@ -1,0 +1,474 @@
+---
+title: History Management
+description: Learn about TanStack Router's history implementations and how to customize navigation behavior
+---
+
+TanStack Router provides a lightweight history API for managing browser navigation. While inspired by the `history` npm package, it's optimized specifically for TanStack Router's needs.
+
+## Overview
+
+The history API provides an abstraction over browser navigation that works across different environments (browser, hash-based, memory/SSR). It handles:
+
+- Navigation (push, replace, go, back, forward)
+- Location tracking (pathname, search, hash, state)
+- Navigation blocking/confirmation
+- Subscription to location changes
+
+## History Types
+
+TanStack Router supports three history implementations:
+
+### Browser History
+
+Uses the browser's History API with standard URLs.
+
+```tsx
+import { createBrowserHistory } from '@tanstack/react-router'
+
+const history = createBrowserHistory()
+
+// URLs look like: /products/123
+```
+
+This is the **recommended** approach for most applications. It provides:
+
+- Clean URLs without hash fragments
+- Full pathname support
+- Better SEO
+- Standard browser behavior
+
+**Requirements:** Server must be configured to serve `index.html` for all routes.
+
+### Hash History
+
+Uses hash-based routing for static hosting environments.
+
+```tsx
+import { createHashHistory } from '@tanstack/react-router'
+
+const history = createHashHistory()
+
+// URLs look like: /#/products/123
+```
+
+Use hash history when:
+
+- Deploying to static hosts without URL rewriting (GitHub Pages, S3)
+- Server configuration is not possible
+- Maintaining compatibility with older systems
+
+### Memory History
+
+Uses in-memory storage for non-browser environments.
+
+```tsx
+import { createMemoryHistory } from '@tanstack/react-router'
+
+const history = createMemoryHistory({
+  initialEntries: ['/'],
+  initialIndex: 0,
+})
+```
+
+Use memory history for:
+
+- Server-side rendering (SSR)
+- Testing environments
+- Non-DOM platforms (React Native, Electron)
+
+## Creating a Router with History
+
+Pass a history instance to the router:
+
+```tsx
+import { createRouter, createBrowserHistory } from '@tanstack/react-router'
+import { routeTree } from './routeTree.gen'
+
+const history = createBrowserHistory()
+
+const router = createRouter({
+  routeTree,
+  history,
+})
+```
+
+If no history is provided, the router creates a browser history by default.
+
+## History API
+
+All history implementations expose a common interface:
+
+### Navigation Methods
+
+#### push
+
+Navigate to a new location and add it to the history stack:
+
+```tsx
+history.push('/products', { from: 'home' })
+```
+
+#### replace
+
+Replace the current location without adding to the stack:
+
+```tsx
+history.replace('/products', { from: 'search' })
+```
+
+#### go
+
+Navigate by a relative offset:
+
+```tsx
+history.go(-2)  // Go back 2 entries
+history.go(1)   // Go forward 1 entry
+```
+
+#### back
+
+Navigate to the previous entry:
+
+```tsx
+history.back()
+```
+
+#### forward
+
+Navigate to the next entry:
+
+```tsx
+history.forward()
+```
+
+### Location Properties
+
+Access current location information:
+
+```tsx
+const location = history.location
+
+console.log(location.pathname)  // '/products/123'
+console.log(location.search)    // '?sort=name'
+console.log(location.hash)      // '#reviews'
+console.log(location.state)     // { from: 'home' }
+console.log(location.href)      // '/products/123?sort=name#reviews'
+```
+
+### Subscriptions
+
+Listen to location changes:
+
+```tsx
+const unsubscribe = history.subscribe(({ location, action }) => {
+  console.log('Navigation:', action.type, 'to', location.pathname)
+})
+
+// Later: cleanup
+unsubscribe()
+```
+
+The action type can be:
+- `'PUSH'` - New entry added
+- `'REPLACE'` - Current entry replaced
+- `'BACK'` - Navigated backward
+- `'FORWARD'` - Navigated forward
+- `'GO'` - Navigated by offset
+
+## History Throttling
+
+TanStack Router implements history throttling to prevent excessive calls to the browser's History API.
+
+### Why Throttling?
+
+Some browsers ignore rapid `pushState`/`replaceState` calls. Throttling ensures:
+
+- Consistent behavior across browsers
+- Prevention of lost state updates
+- Optimized performance for rapid navigation
+
+### How It Works
+
+Updates are queued in a microtask and flushed asynchronously:
+
+```tsx
+// Multiple rapid updates
+history.push('/page1')
+history.replace('/page2')
+history.push('/page3')
+
+// Only the final state is applied to the URL
+// But the router's internal state is always up to date
+```
+
+### Forcing Immediate Flush
+
+If you need the URL to be immediately updated:
+
+```tsx
+history.push('/important')
+history.flush()  // Forces immediate URL update
+```
+
+This is rarely needed in typical applications.
+
+## Navigation Blocking
+
+Block navigation to show confirmation dialogs:
+
+```tsx
+const unblock = history.block({
+  blockerFn: async ({ currentLocation, nextLocation, action }) => {
+    const shouldAllow = await confirm(
+      `Leave ${currentLocation.pathname} for ${nextLocation.pathname}?`
+    )
+    return shouldAllow
+  },
+  enableBeforeUnload: true,  // Also warn on page close
+})
+
+// Later: remove blocker
+unblock()
+```
+
+### Blocker Function
+
+The blocker function receives:
+
+- `currentLocation`: Where the user currently is
+- `nextLocation`: Where they're trying to go
+- `action`: The type of navigation (PUSH, REPLACE, etc.)
+
+Return `true` to allow navigation, `false` to block it.
+
+### beforeunload Event
+
+When `enableBeforeUnload` is `true`, the browser shows a confirmation dialog when:
+
+- Closing the tab/window
+- Navigating away from your site
+- Refreshing the page
+
+You can also pass a function:
+
+```tsx
+history.block({
+  blockerFn: /* ... */,
+  enableBeforeUnload: () => {
+    // Only enable if form has unsaved changes
+    return formHasChanges
+  },
+})
+```
+
+### Multiple Blockers
+
+You can register multiple blockers:
+
+```tsx
+const unblock1 = history.block({ blockerFn: blocker1 })
+const unblock2 = history.block({ blockerFn: blocker2 })
+
+// All blockers must return true for navigation to proceed
+```
+
+If any blocker returns `false`, navigation is cancelled.
+
+## Custom History Options
+
+### Browser History Options
+
+```tsx
+import { createBrowserHistory } from '@tanstack/react-router'
+
+const history = createBrowserHistory({
+  // Custom window object (useful for iframes)
+  window: customWindow,
+  
+  // Custom href creator
+  createHref: (path) => `/app${path}`,
+  
+  // Custom location parser
+  parseLocation: () => ({
+    pathname: window.location.pathname,
+    search: window.location.search,
+    hash: window.location.hash,
+    state: window.history.state,
+  }),
+})
+```
+
+### Hash History Options
+
+```tsx
+import { createHashHistory } from '@tanstack/react-router'
+
+const history = createHashHistory({
+  window: customWindow,
+})
+```
+
+### Memory History Options
+
+```tsx
+import { createMemoryHistory } from '@tanstack/react-router'
+
+const history = createMemoryHistory({
+  // Initial location stack
+  initialEntries: ['/home', '/products', '/cart'],
+  
+  // Current position in the stack (default: last entry)
+  initialIndex: 2,  // Start at /cart
+})
+```
+
+## History State
+
+Pass custom state with navigation:
+
+```tsx
+history.push('/products', {
+  referrer: 'search',
+  query: 'laptop',
+})
+
+// Access in the next route
+const state = history.location.state
+console.log(state.referrer)  // 'search'
+console.log(state.query)     // 'laptop'
+```
+
+### State Structure
+
+TanStack Router adds internal state properties:
+
+```tsx
+interface ParsedHistoryState {
+  key: string          // Unique key for this location
+  __TSR_key: string    // Internal key (preferred)
+  __TSR_index: number  // Position in history stack
+  // ...your custom state
+}
+```
+
+Avoid using keys starting with `__TSR` to prevent conflicts.
+
+## Creating Href URLs
+
+Generate URLs for use in links:
+
+```tsx
+const href = history.createHref('/products?sort=name')
+console.log(href)  // '/products?sort=name' (browser)
+                   // '/#/products?sort=name' (hash)
+```
+
+This respects the history type and any custom `createHref` logic.
+
+## Server-Side Rendering
+
+For SSR, use memory history:
+
+```tsx
+import { createMemoryHistory } from '@tanstack/react-router'
+
+export function createServerRouter(url: string) {
+  const history = createMemoryHistory({
+    initialEntries: [url],
+  })
+  
+  return createRouter({
+    routeTree,
+    history,
+  })
+}
+```
+
+On the client, hydrate with browser history:
+
+```tsx
+const history = createBrowserHistory()
+
+const router = createRouter({
+  routeTree,
+  history,
+})
+```
+
+## Testing with History
+
+Use memory history for predictable tests:
+
+```tsx
+import { createMemoryHistory } from '@tanstack/react-router'
+
+test('navigates to product page', async () => {
+  const history = createMemoryHistory({
+    initialEntries: ['/'],
+  })
+  
+  const router = createRouter({ routeTree, history })
+  
+  // Simulate navigation
+  await router.navigate({ to: '/products/$id', params: { id: '123' } })
+  
+  expect(history.location.pathname).toBe('/products/123')
+})
+```
+
+## History Length
+
+Get the total number of entries:
+
+```tsx
+console.log(history.length)  // Number of entries in the stack
+```
+
+Check if back navigation is possible:
+
+```tsx
+if (history.canGoBack()) {
+  history.back()
+}
+```
+
+## Cleanup
+
+Destroy the history instance to remove event listeners:
+
+```tsx
+history.destroy()
+```
+
+This is typically only needed in tests or when dynamically creating/removing routers.
+
+## Best Practices
+
+1. **Use browser history** unless you have a specific reason not to
+2. **Configure server redirects** to support browser history
+3. **Use memory history** for SSR and testing
+4. **Avoid direct history manipulation** - use router navigation methods instead
+5. **Cleanup blockers** when components unmount
+6. **Test navigation** using memory history
+7. **Prefer router.navigate()** over history methods for type safety
+
+## Migration from React Router
+
+If you're coming from React Router:
+
+| React Router | TanStack Router |
+|--------------|----------------|
+| `createBrowserRouter` + `BrowserRouter` | `createBrowserHistory` |
+| `createHashRouter` + `HashRouter` | `createHashHistory` |
+| `createMemoryRouter` + `MemoryRouter` | `createMemoryHistory` |
+| `history.push(path)` | `history.push(path)` |
+| `history.replace(path)` | `history.replace(path)` |
+| `history.goBack()` | `history.back()` |
+| `history.goForward()` | `history.forward()` |
+| `history.listen()` | `history.subscribe()` |
+
+## Related
+
+- [Router Configuration](/router/react/router)
+- [Navigation](/router/concepts/navigation)
+- [SSR Guide](/router/guides/ssr)

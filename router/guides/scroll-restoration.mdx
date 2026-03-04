@@ -1,0 +1,400 @@
+---
+title: Scroll Restoration
+---
+
+# Scroll Restoration
+
+Scroll restoration ensures that when users navigate back and forth between pages, the scroll position is restored to where they left off. TanStack Router provides both automatic and manual scroll restoration.
+
+## Overview
+
+Scroll restoration helps maintain a native-like browsing experience by:
+- Restoring scroll position when navigating back
+- Scrolling to top on new page navigation
+- Supporting custom scroll containers
+- Working with virtualized lists
+
+## Automatic Scroll Restoration
+
+Enable scroll restoration globally in your router:
+
+```tsx src/main.tsx
+import { createRouter, RouterProvider } from '@tanstack/react-router'
+import { routeTree } from './routeTree.gen'
+
+const router = createRouter({
+  routeTree,
+  scrollRestoration: true, // Enable scroll restoration
+  defaultPreload: 'intent',
+})
+
+function App() {
+  return <RouterProvider router={router} />
+}
+```
+
+With this enabled:
+- **Forward navigation**: Scrolls to top
+- **Back/forward navigation**: Restores previous scroll position
+- **Same page navigation**: Maintains scroll position
+
+## Disable Scroll Reset
+
+Prevent scrolling to top for specific links:
+
+```tsx
+import { Link } from '@tanstack/react-router'
+
+function Navigation() {
+  return (
+    <>
+      {/* Normal link - scrolls to top */}
+      <Link to="/about">About</Link>
+      
+      {/* Preserve scroll position */}
+      <Link to="/about" resetScroll={false}>
+        About (No Reset)
+      </Link>
+    </>
+  )
+}
+```
+
+## Manual Scroll Restoration
+
+For custom scroll containers, use `useElementScrollRestoration`:
+
+```tsx src/routes/by-element.tsx
+import { createFileRoute, useElementScrollRestoration } from '@tanstack/react-router'
+import { useRef } from 'react'
+
+export const Route = createFileRoute('/by-element')({
+  component: ByElementComponent,
+})
+
+function ByElementComponent() {
+  const scrollableRef = useRef<HTMLDivElement>(null)
+  
+  // Unique ID for this scroll container
+  const scrollRestorationId = 'my-scrollable-content'
+  
+  // Get scroll restoration entry
+  const scrollEntry = useElementScrollRestoration({
+    id: scrollRestorationId,
+  })
+  
+  return (
+    <div
+      ref={scrollableRef}
+      data-scroll-restoration-id={scrollRestorationId}
+      className="overflow-auto h-96"
+      style={{
+        // Restore initial scroll position
+        scrollTop: scrollEntry?.scrollY,
+      }}
+    >
+      {/* Your content */}
+      <div className="space-y-4">
+        {Array.from({ length: 50 }).map((_, i) => (
+          <div key={i} className="p-4 border">
+            Item {i + 1}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+```
+
+## Virtualized Lists
+
+Restore scroll position in virtualized lists using TanStack Virtual:
+
+```tsx
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { useElementScrollRestoration } from '@tanstack/react-router'
+import { useRef } from 'react'
+
+function VirtualizedList() {
+  const scrollRestorationId = 'myVirtualizedContent'
+  
+  // Get scroll restoration entry
+  const scrollEntry = useElementScrollRestoration({
+    id: scrollRestorationId,
+  })
+  
+  const parentRef = useRef<HTMLDivElement>(null)
+  
+  // Initialize virtualizer with restored scroll position
+  const virtualizer = useVirtualizer({
+    count: 10000,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 100,
+    // Use restored scroll position as initial offset
+    initialOffset: scrollEntry?.scrollY,
+  })
+  
+  return (
+    <div
+      ref={parentRef}
+      data-scroll-restoration-id={scrollRestorationId}
+      className="h-96 overflow-auto"
+    >
+      <div
+        style={{
+          height: `${virtualizer.getTotalSize()}px`,
+          position: 'relative',
+        }}
+      >
+        {virtualizer.getVirtualItems().map((item) => (
+          <div
+            key={item.index}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: `${item.size}px`,
+              transform: `translateY(${item.start}px)`,
+            }}
+          >
+            Row {item.index}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+```
+
+## Complete Example
+
+Here's a full example from the TanStack Router source:
+
+```tsx src/routes/scroll-demo.tsx
+import { createFileRoute, Link, Outlet } from '@tanstack/react-router'
+import { useElementScrollRestoration } from '@tanstack/react-router'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { useRef } from 'react'
+
+export const Route = createFileRoute('/scroll-demo')({
+  component: ScrollDemo,
+})
+
+function ScrollDemo() {
+  return (
+    <div>
+      <nav className="sticky top-0 bg-white border-b p-4">
+        <Link to="/" className="mr-4">Home</Link>
+        <Link to="/about" className="mr-4">About</Link>
+        <Link to="/about" resetScroll={false}>About (No Reset)</Link>
+      </nav>
+      
+      <div className="p-4 space-y-4">
+        {/* Regular scrollable content */}
+        {Array.from({ length: 50 }).map((_, i) => (
+          <div key={i} className="h-24 bg-gray-100 rounded p-4">
+            Item {i + 1}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+```
+
+## Multiple Scroll Containers
+
+Handle multiple scrollable areas on one page:
+
+```tsx
+function MultipleScrollAreas() {
+  const sidebar = useElementScrollRestoration({ id: 'sidebar' })
+  const main = useElementScrollRestoration({ id: 'main' })
+  const comments = useElementScrollRestoration({ id: 'comments' })
+  
+  return (
+    <div className="flex h-screen">
+      {/* Sidebar */}
+      <aside
+        data-scroll-restoration-id="sidebar"
+        className="w-64 overflow-auto"
+        style={{ scrollTop: sidebar?.scrollY }}
+      >
+        {/* Sidebar content */}
+      </aside>
+      
+      {/* Main content */}
+      <main
+        data-scroll-restoration-id="main"
+        className="flex-1 overflow-auto"
+        style={{ scrollTop: main?.scrollY }}
+      >
+        {/* Main content */}
+      </main>
+      
+      {/* Comments panel */}
+      <aside
+        data-scroll-restoration-id="comments"
+        className="w-80 overflow-auto"
+        style={{ scrollTop: comments?.scrollY }}
+      >
+        {/* Comments */}
+      </aside>
+    </div>
+  )
+}
+```
+
+## Smooth Scrolling
+
+Enable smooth scrolling in CSS:
+
+```css
+html {
+  scroll-behavior: smooth;
+}
+
+/* Or for specific containers */
+.smooth-scroll {
+  scroll-behavior: smooth;
+}
+```
+
+## Hash Navigation
+
+Scroll to anchors using hash:
+
+```tsx
+import { Link } from '@tanstack/react-router'
+
+function TableOfContents() {
+  return (
+    <nav>
+      <Link to="/docs" hash="#introduction">
+        Introduction
+      </Link>
+      <Link to="/docs" hash="#getting-started">
+        Getting Started
+      </Link>
+      <Link to="/docs" hash="#examples">
+        Examples
+      </Link>
+    </nav>
+  )
+}
+
+function DocsPage() {
+  return (
+    <article>
+      <section id="introduction">
+        <h2>Introduction</h2>
+        {/* ... */}
+      </section>
+      
+      <section id="getting-started">
+        <h2>Getting Started</h2>
+        {/* ... */}
+      </section>
+      
+      <section id="examples">
+        <h2>Examples</h2>
+        {/* ... */}
+      </section>
+    </article>
+  )
+}
+```
+
+## Scroll to Top Button
+
+Implement a scroll to top button:
+
+```tsx
+import { useState, useEffect } from 'react'
+
+function ScrollToTop() {
+  const [isVisible, setIsVisible] = useState(false)
+  
+  useEffect(() => {
+    const toggleVisibility = () => {
+      setIsVisible(window.pageYOffset > 300)
+    }
+    
+    window.addEventListener('scroll', toggleVisibility)
+    return () => window.removeEventListener('scroll', toggleVisibility)
+  }, [])
+  
+  const scrollToTop = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth',
+    })
+  }
+  
+  if (!isVisible) return null
+  
+  return (
+    <button
+      onClick={scrollToTop}
+      className="fixed bottom-4 right-4 p-3 bg-blue-500 text-white rounded-full shadow-lg"
+    >
+      ↑
+    </button>
+  )
+}
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Enable Globally" icon="globe">
+    Turn on scroll restoration at the router level for consistent behavior
+  </Card>
+  
+  <Card title="Unique IDs" icon="fingerprint">
+    Use descriptive, unique IDs for each scroll container
+  </Card>
+  
+  <Card title="Test Navigation" icon="arrows-left-right">
+    Test both forward and back navigation to ensure proper restoration
+  </Card>
+  
+  <Card title="Consider UX" icon="user">
+    Use resetScroll={false} sparingly - users expect to scroll to top on new pages
+  </Card>
+</CardGroup>
+
+<Note>
+  **Performance**: Scroll restoration adds minimal overhead and significantly improves user experience.
+</Note>
+
+<Warning>
+  **Dynamic Content**: If your page content changes dynamically, scroll positions may not restore perfectly. Consider using virtualization for large lists.
+</Warning>
+
+## Troubleshooting
+
+### Scroll not restoring
+
+1. Ensure `scrollRestoration: true` in router config
+2. Check that `data-scroll-restoration-id` matches the ID in `useElementScrollRestoration`
+3. Verify the element is scrollable (`overflow: auto` or `scroll`)
+
+### Unexpected scroll behavior
+
+1. Check for conflicting scroll handlers
+2. Ensure only one scroll restoration ID per element
+3. Verify CSS doesn't prevent scrolling
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Code Splitting" href="./code-splitting">
+    Optimize bundle size while maintaining scroll restoration
+  </Card>
+  
+  <Card title="SSR" href="./ssr">
+    Handle scroll restoration in server-side rendered apps
+  </Card>
+</CardGroup>

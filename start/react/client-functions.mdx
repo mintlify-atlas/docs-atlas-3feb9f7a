@@ -1,0 +1,467 @@
+---
+title: Client Functions
+description: Learn how to use client-side functions and hooks in React Start
+---
+
+# Client Functions
+
+React Start provides utilities for working with server functions from the client and for defining client-only code.
+
+## useServerFn
+
+The `useServerFn` hook wraps a server function for use in React components, providing automatic redirect handling and router integration.
+
+### Basic Usage
+
+```tsx
+import { useServerFn } from '@tanstack/react-start'
+import { updateProfile } from '~/utils/users'
+
+function ProfileForm() {
+  const updateProfileFn = useServerFn(updateProfile)
+  const [isPending, startTransition] = useTransition()
+  
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    startTransition(async () => {
+      await updateProfileFn({ 
+        data: { name: 'John', email: 'john@example.com' } 
+      })
+    })
+  }
+  
+  return (
+    <form onSubmit={handleSubmit}>
+      {/* form fields */}
+      <button disabled={isPending}>Save</button>
+    </form>
+  )
+}
+```
+
+### Why Use useServerFn?
+
+While you can call server functions directly from components, `useServerFn` provides important benefits:
+
+1. **Automatic Redirect Handling**: Redirects thrown from server functions are automatically handled by the router
+2. **Router Integration**: Maintains `_fromLocation` for proper navigation context
+3. **Error Propagation**: Correctly propagates non-redirect errors
+
+```tsx
+import { useServerFn } from '@tanstack/react-start'
+import { logout } from '~/utils/auth'
+
+function LogoutButton() {
+  const logoutFn = useServerFn(logout)
+  
+  const handleLogout = async () => {
+    try {
+      await logoutFn()
+      // If logout throws redirect({ to: '/login' }),
+      // useServerFn handles the navigation automatically
+    } catch (error) {
+      // Other errors are caught here
+      console.error('Logout failed:', error)
+    }
+  }
+  
+  return <button onClick={handleLogout}>Logout</button>
+}
+```
+
+## Direct Server Function Calls
+
+You can call server functions directly without `useServerFn`, but you lose automatic redirect handling:
+
+```tsx
+import { fetchUsers } from '~/utils/users'
+
+function UsersList() {
+  const [users, setUsers] = React.useState([])
+  
+  React.useEffect(() => {
+    // Direct call - no redirect handling
+    fetchUsers().then(setUsers)
+  }, [])
+  
+  return <ul>{users.map(user => <li key={user.id}>{user.name}</li>)}</ul>
+}
+```
+
+## Custom Fetch Options
+
+Pass custom options when calling server functions:
+
+```tsx
+import { useServerFn } from '@tanstack/react-start'
+import { fetchData } from '~/utils/data'
+
+function DataFetcher() {
+  const fetchDataFn = useServerFn(fetchData)
+  const abortController = new AbortController()
+  
+  const loadData = async () => {
+    const data = await fetchDataFn({
+      data: { filter: 'active' },
+      headers: { 'x-custom': 'value' },
+      signal: abortController.signal,
+      fetch: customFetch, // Custom fetch implementation
+    })
+    return data
+  }
+  
+  return <button onClick={loadData}>Load</button>
+}
+```
+
+## Client-Only Code
+
+Mark modules that should never run on the server:
+
+```tsx
+import '@tanstack/react-start/client-only'
+
+// This code will only run in the browser
+export function useLocalStorage(key: string) {
+  const [value, setValue] = React.useState(() => {
+    return localStorage.getItem(key)
+  })
+  
+  React.useEffect(() => {
+    localStorage.setItem(key, value ?? '')
+  }, [key, value])
+  
+  return [value, setValue]
+}
+```
+
+### Import Protection
+
+If a server-side file tries to import a client-only module, you'll get a build error:
+
+```tsx
+// client-utils.ts
+import '@tanstack/react-start/client-only'
+export const getFromLocalStorage = () => localStorage.getItem('key')
+
+// server-function.ts
+import { createServerFn } from '@tanstack/react-start'
+import { getFromLocalStorage } from './client-utils' // ❌ Build error!
+
+const badServerFn = createServerFn({ method: 'GET' }).handler(async () => {
+  return getFromLocalStorage()
+})
+```
+
+## Mutations with React Query
+
+Combine server functions with React Query for powerful data mutation patterns:
+
+```tsx
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useServerFn } from '@tanstack/react-start'
+import { updateUser } from '~/utils/users'
+
+function UserEditor({ userId }: { userId: string }) {
+  const queryClient = useQueryClient()
+  const updateUserFn = useServerFn(updateUser)
+  
+  const mutation = useMutation({
+    mutationFn: async (data: { name: string; email: string }) => {
+      return updateUserFn({ data })
+    },
+    onSuccess: () => {
+      // Invalidate and refetch
+      queryClient.invalidateQueries({ queryKey: ['user', userId] })
+    },
+  })
+  
+  const handleSubmit = (data: { name: string; email: string }) => {
+    mutation.mutate(data)
+  }
+  
+  return (
+    <form onSubmit={handleSubmit}>
+      {mutation.isPending && <div>Saving...</div>}
+      {mutation.isError && <div>Error: {mutation.error.message}</div>}
+      {/* form fields */}
+    </form>
+  )
+}
+```
+
+## Form Handling
+
+### Progressive Enhancement
+
+Build forms that work without JavaScript:
+
+```tsx
+import { useServerFn } from '@tanstack/react-start'
+import { createUser } from '~/utils/users'
+
+function SignupForm() {
+  const createUserFn = useServerFn(createUser)
+  const [isPending, startTransition] = useTransition()
+  
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        const formData = new FormData(e.currentTarget)
+        startTransition(async () => {
+          await createUserFn({
+            data: {
+              email: formData.get('email'),
+              password: formData.get('password'),
+            },
+          })
+        })
+      }}
+    >
+      <input name="email" type="email" required />
+      <input name="password" type="password" required />
+      <button type="submit" disabled={isPending}>
+        {isPending ? 'Creating...' : 'Sign Up'}
+      </button>
+    </form>
+  )
+}
+```
+
+### Optimistic Updates
+
+Update the UI immediately, then reconcile with the server:
+
+```tsx
+import { useServerFn } from '@tanstack/react-start'
+import { toggleTodo } from '~/utils/todos'
+
+function TodoItem({ todo }) {
+  const toggleTodoFn = useServerFn(toggleTodo)
+  const [optimisticCompleted, setOptimisticCompleted] = React.useState(
+    todo.completed
+  )
+  
+  const handleToggle = async () => {
+    // Update UI immediately
+    setOptimisticCompleted(!optimisticCompleted)
+    
+    try {
+      // Send to server
+      const result = await toggleTodoFn({ data: todo.id })
+      // Reconcile with server response
+      setOptimisticCompleted(result.completed)
+    } catch (error) {
+      // Revert on error
+      setOptimisticCompleted(!optimisticCompleted)
+    }
+  }
+  
+  return (
+    <label>
+      <input
+        type="checkbox"
+        checked={optimisticCompleted}
+        onChange={handleToggle}
+      />
+      {todo.title}
+    </label>
+  )
+}
+```
+
+## Error Handling
+
+Handle errors from server functions:
+
+```tsx
+import { useServerFn } from '@tanstack/react-start'
+import { submitForm } from '~/utils/forms'
+
+function ContactForm() {
+  const submitFormFn = useServerFn(submitForm)
+  const [error, setError] = React.useState<string | null>(null)
+  
+  const handleSubmit = async (data: FormData) => {
+    setError(null)
+    try {
+      await submitFormFn({ data })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error')
+    }
+  }
+  
+  return (
+    <form onSubmit={handleSubmit}>
+      {error && <div role="alert">{error}</div>}
+      {/* form fields */}
+    </form>
+  )
+}
+```
+
+## Polling and Refetching
+
+Periodically call server functions:
+
+```tsx
+import { useServerFn } from '@tanstack/react-start'
+import { getJobStatus } from '~/utils/jobs'
+
+function JobStatusPoller({ jobId }: { jobId: string }) {
+  const getJobStatusFn = useServerFn(getJobStatus)
+  const [status, setStatus] = React.useState('pending')
+  
+  React.useEffect(() => {
+    if (status === 'complete') return
+    
+    const interval = setInterval(async () => {
+      const result = await getJobStatusFn({ data: jobId })
+      setStatus(result.status)
+    }, 2000)
+    
+    return () => clearInterval(interval)
+  }, [jobId, status, getJobStatusFn])
+  
+  return <div>Status: {status}</div>
+}
+```
+
+## Abort Signals
+
+Cancel in-flight requests:
+
+```tsx
+import { useServerFn } from '@tanstack/react-start'
+import { searchUsers } from '~/utils/users'
+
+function UserSearch() {
+  const searchUsersFn = useServerFn(searchUsers)
+  const [query, setQuery] = React.useState('')
+  const abortControllerRef = React.useRef<AbortController>()
+  
+  const handleSearch = async (searchQuery: string) => {
+    // Cancel previous request
+    abortControllerRef.current?.abort()
+    
+    // Create new abort controller
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+    
+    try {
+      const results = await searchUsersFn({
+        data: { query: searchQuery },
+        signal: controller.signal,
+      })
+      return results
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        // Request was cancelled
+        return
+      }
+      throw error
+    }
+  }
+  
+  return (
+    <input
+      value={query}
+      onChange={(e) => {
+        setQuery(e.target.value)
+        handleSearch(e.target.value)
+      }}
+    />
+  )
+}
+```
+
+## Best Practices
+
+### Use Transitions for Mutations
+
+Wrap mutations in `useTransition` for better UX:
+
+```tsx
+const [isPending, startTransition] = useTransition()
+
+const handleSave = () => {
+  startTransition(async () => {
+    await saveFn({ data })
+  })
+}
+```
+
+### Combine with Suspense
+
+Use Suspense boundaries for loading states:
+
+```tsx
+import { Suspense } from 'react'
+import { Await } from '@tanstack/react-router'
+
+function DataDisplay() {
+  const data = Route.useLoaderData()
+  
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <Await promise={data.deferredData}>
+        {(resolved) => <div>{resolved}</div>}
+      </Await>
+    </Suspense>
+  )
+}
+```
+
+### Handle Loading States
+
+Provide feedback during async operations:
+
+```tsx
+const [isLoading, setIsLoading] = React.useState(false)
+
+const handleAction = async () => {
+  setIsLoading(true)
+  try {
+    await actionFn({ data })
+  } finally {
+    setIsLoading(false)
+  }
+}
+```
+
+## API Reference
+
+### useServerFn(serverFn)
+
+Wraps a server function for use in React components.
+
+**Parameters:**
+- `serverFn`: Server function created with `createServerFn`
+
+**Returns:** Wrapped server function with redirect handling
+
+**Example:**
+```tsx
+const wrappedFn = useServerFn(myServerFn)
+await wrappedFn({ data: 'input' })
+```
+
+### Server Function Call Options
+
+When calling server functions from the client:
+
+```tsx
+interface CallOptions {
+  data?: unknown              // Input data
+  headers?: HeadersInit       // Custom headers
+  signal?: AbortSignal        // Abort signal
+  fetch?: typeof fetch        // Custom fetch implementation
+}
+```
+
+## Related
+
+- [Server Functions](/start/react/server-functions) - Creating server functions
+- [Components](/start/react/components) - React Start components
+- [Middleware](/start/guides/middleware) - Request and function middleware

@@ -1,0 +1,636 @@
+---
+title: API Routes
+---
+
+# API Routes
+
+API routes in TanStack Start allow you to create REST API endpoints alongside your application routes. They provide a type-safe way to build backend APIs with full access to server-side resources.
+
+## Creating API Routes
+
+API routes are created using the `server` option in route files:
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/api/users')({
+  server: {
+    handlers: {
+      GET: async ({ request }) => {
+        const users = await db.users.findAll()
+        return Response.json(users)
+      },
+    },
+  },
+})
+```
+
+## HTTP Methods
+
+Support multiple HTTP methods in a single route:
+
+```tsx
+export const Route = createFileRoute('/api/posts')({
+  server: {
+    handlers: {
+      GET: async ({ request }) => {
+        const posts = await db.posts.findAll()
+        return Response.json(posts)
+      },
+      
+      POST: async ({ request }) => {
+        const body = await request.json()
+        const post = await db.posts.create(body)
+        return Response.json(post, { status: 201 })
+      },
+      
+      DELETE: async ({ request }) => {
+        const url = new URL(request.url)
+        const id = url.searchParams.get('id')
+        await db.posts.delete(id)
+        return new Response(null, { status: 204 })
+      },
+    },
+  },
+})
+```
+
+## Dynamic Routes
+
+Use route parameters in API routes:
+
+```tsx
+export const Route = createFileRoute('/api/users/$userId')({
+  server: {
+    handlers: {
+      GET: async ({ params, request }) => {
+        const user = await db.users.findById(params.userId)
+        
+        if (!user) {
+          return Response.json(
+            { error: 'User not found' },
+            { status: 404 }
+          )
+        }
+        
+        return Response.json(user)
+      },
+      
+      PUT: async ({ params, request }) => {
+        const body = await request.json()
+        const user = await db.users.update(params.userId, body)
+        return Response.json(user)
+      },
+      
+      DELETE: async ({ params }) => {
+        await db.users.delete(params.userId)
+        return new Response(null, { status: 204 })
+      },
+    },
+  },
+})
+```
+
+## Request Handling
+
+### Parsing Request Body
+
+```tsx
+export const Route = createFileRoute('/api/posts')({
+  server: {
+    handlers: {
+      POST: async ({ request }) => {
+        // JSON body
+        const data = await request.json()
+        
+        // FormData
+        const formData = await request.formData()
+        const title = formData.get('title')
+        
+        // Text
+        const text = await request.text()
+        
+        // Binary data
+        const buffer = await request.arrayBuffer()
+        
+        return Response.json({ success: true })
+      },
+    },
+  },
+})
+```
+
+### Query Parameters
+
+```tsx
+export const Route = createFileRoute('/api/search')({
+  server: {
+    handlers: {
+      GET: async ({ request }) => {
+        const url = new URL(request.url)
+        const query = url.searchParams.get('q')
+        const limit = parseInt(url.searchParams.get('limit') || '10')
+        const offset = parseInt(url.searchParams.get('offset') || '0')
+        
+        const results = await db.posts.search({
+          query,
+          limit,
+          offset,
+        })
+        
+        return Response.json(results)
+      },
+    },
+  },
+})
+```
+
+### Request Headers
+
+```tsx
+export const Route = createFileRoute('/api/protected')({
+  server: {
+    handlers: {
+      GET: async ({ request }) => {
+        const auth = request.headers.get('Authorization')
+        const contentType = request.headers.get('Content-Type')
+        const userAgent = request.headers.get('User-Agent')
+        
+        if (!auth) {
+          return new Response('Unauthorized', { status: 401 })
+        }
+        
+        return Response.json({ authenticated: true })
+      },
+    },
+  },
+})
+```
+
+## Response Handling
+
+### JSON Responses
+
+```tsx
+export const Route = createFileRoute('/api/data')({
+  server: {
+    handlers: {
+      GET: async () => {
+        return Response.json(
+          { message: 'Success', data: [...] },
+          { 
+            status: 200,
+            headers: {
+              'Cache-Control': 'public, max-age=3600',
+            },
+          }
+        )
+      },
+    },
+  },
+})
+```
+
+### Custom Headers
+
+```tsx
+export const Route = createFileRoute('/api/file')({
+  server: {
+    handlers: {
+      GET: async () => {
+        const file = await readFile('path/to/file.pdf')
+        
+        return new Response(file, {
+          headers: {
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': 'attachment; filename="file.pdf"',
+            'Cache-Control': 'no-cache',
+          },
+        })
+      },
+    },
+  },
+})
+```
+
+### Streaming Responses
+
+```tsx
+export const Route = createFileRoute('/api/stream')({
+  server: {
+    handlers: {
+      GET: async () => {
+        const stream = new ReadableStream({
+          async start(controller) {
+            for (let i = 0; i < 10; i++) {
+              const data = await fetchChunk(i)
+              controller.enqueue(
+                new TextEncoder().encode(JSON.stringify(data) + '\n')
+              )
+              await new Promise((r) => setTimeout(r, 1000))
+            }
+            controller.close()
+          },
+        })
+        
+        return new Response(stream, {
+          headers: {
+            'Content-Type': 'application/x-ndjson',
+            'Cache-Control': 'no-cache',
+          },
+        })
+      },
+    },
+  },
+})
+```
+
+## Middleware with API Routes
+
+Apply middleware to API routes:
+
+```tsx
+import { createMiddleware } from '@tanstack/react-start'
+
+const apiAuth = createMiddleware().server(async ({ request, next }) => {
+  const apiKey = request.headers.get('x-api-key')
+  
+  if (!apiKey || !(await validateApiKey(apiKey))) {
+    throw new Response('Invalid API key', { status: 401 })
+  }
+  
+  return next()
+})
+
+const rateLimiter = createMiddleware().server(async ({ request, next }) => {
+  const ip = request.headers.get('x-forwarded-for')
+  
+  if (await isRateLimited(ip)) {
+    throw new Response('Too many requests', { status: 429 })
+  }
+  
+  return next()
+})
+
+export const Route = createFileRoute('/api/data')({
+  server: {
+    middleware: [rateLimiter, apiAuth],
+    handlers: {
+      GET: async ({ request }) => {
+        const data = await fetchData()
+        return Response.json(data)
+      },
+    },
+  },
+})
+```
+
+## Error Handling
+
+### Custom Error Responses
+
+```tsx
+export const Route = createFileRoute('/api/users/$userId')({
+  server: {
+    handlers: {
+      GET: async ({ params }) => {
+        try {
+          const user = await db.users.findById(params.userId)
+          return Response.json(user)
+        } catch (error) {
+          if (error instanceof NotFoundError) {
+            return Response.json(
+              { error: 'User not found' },
+              { status: 404 }
+            )
+          }
+          
+          if (error instanceof ValidationError) {
+            return Response.json(
+              { error: 'Invalid user ID', details: error.details },
+              { status: 400 }
+            )
+          }
+          
+          console.error('Unexpected error:', error)
+          return Response.json(
+            { error: 'Internal server error' },
+            { status: 500 }
+          )
+        }
+      },
+    },
+  },
+})
+```
+
+### Error Middleware
+
+```tsx
+const errorHandler = createMiddleware().server(async ({ next }) => {
+  try {
+    return await next()
+  } catch (error) {
+    console.error('API Error:', error)
+    
+    return Response.json(
+      { 
+        error: 'Internal server error',
+        message: process.env.NODE_ENV === 'development' 
+          ? error.message 
+          : 'An error occurred',
+      },
+      { status: 500 }
+    )
+  }
+})
+```
+
+## CORS Support
+
+```tsx
+const corsMiddleware = createMiddleware().server(
+  async ({ request, next }) => {
+    const origin = request.headers.get('origin')
+    
+    // Handle preflight
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': origin || '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          'Access-Control-Max-Age': '86400',
+        },
+      })
+    }
+    
+    const result = await next()
+    
+    // Add CORS headers to response
+    result.response.headers.set(
+      'Access-Control-Allow-Origin',
+      origin || '*'
+    )
+    result.response.headers.set(
+      'Access-Control-Allow-Credentials',
+      'true'
+    )
+    
+    return result
+  }
+)
+
+export const Route = createFileRoute('/api/public')({
+  server: {
+    middleware: [corsMiddleware],
+    handlers: {
+      GET: async () => Response.json({ message: 'Hello' }),
+    },
+  },
+})
+```
+
+## Webhooks
+
+Handle webhook endpoints:
+
+```tsx
+import crypto from 'crypto'
+
+function verifySignature(payload: string, signature: string, secret: string) {
+  const hmac = crypto.createHmac('sha256', secret)
+  const digest = hmac.update(payload).digest('hex')
+  return crypto.timingSafeEqual(
+    Buffer.from(signature),
+    Buffer.from(digest)
+  )
+}
+
+export const Route = createFileRoute('/api/webhooks/stripe')({
+  server: {
+    handlers: {
+      POST: async ({ request }) => {
+        const payload = await request.text()
+        const signature = request.headers.get('stripe-signature')
+        
+        if (!verifySignature(payload, signature, process.env.STRIPE_SECRET)) {
+          return new Response('Invalid signature', { status: 401 })
+        }
+        
+        const event = JSON.parse(payload)
+        
+        switch (event.type) {
+          case 'payment_intent.succeeded':
+            await handlePaymentSuccess(event.data)
+            break
+          case 'payment_intent.failed':
+            await handlePaymentFailure(event.data)
+            break
+        }
+        
+        return Response.json({ received: true })
+      },
+    },
+  },
+})
+```
+
+## File Uploads
+
+```tsx
+export const Route = createFileRoute('/api/upload')({
+  server: {
+    handlers: {
+      POST: async ({ request }) => {
+        const formData = await request.formData()
+        const file = formData.get('file') as File
+        
+        if (!file) {
+          return Response.json(
+            { error: 'No file provided' },
+            { status: 400 }
+          )
+        }
+        
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+          return Response.json(
+            { error: 'Only images allowed' },
+            { status: 400 }
+          )
+        }
+        
+        // Validate file size (5MB max)
+        if (file.size > 5 * 1024 * 1024) {
+          return Response.json(
+            { error: 'File too large' },
+            { status: 400 }
+          )
+        }
+        
+        // Save file
+        const buffer = await file.arrayBuffer()
+        const filename = `${Date.now()}-${file.name}`
+        await fs.writeFile(`/uploads/${filename}`, Buffer.from(buffer))
+        
+        return Response.json({
+          filename,
+          url: `/uploads/${filename}`,
+        })
+      },
+    },
+  },
+})
+```
+
+## Pagination
+
+```tsx
+export const Route = createFileRoute('/api/posts')({
+  server: {
+    handlers: {
+      GET: async ({ request }) => {
+        const url = new URL(request.url)
+        const page = parseInt(url.searchParams.get('page') || '1')
+        const limit = parseInt(url.searchParams.get('limit') || '20')
+        const offset = (page - 1) * limit
+        
+        const [posts, total] = await Promise.all([
+          db.posts.findMany({ limit, offset }),
+          db.posts.count(),
+        ])
+        
+        return Response.json({
+          data: posts,
+          pagination: {
+            page,
+            limit,
+            total,
+            pages: Math.ceil(total / limit),
+          },
+        })
+      },
+    },
+  },
+})
+```
+
+## REST API Best Practices
+
+### Consistent Response Format
+
+```tsx
+type ApiResponse<T> = {
+  success: boolean
+  data?: T
+  error?: string
+  meta?: {
+    timestamp: string
+    version: string
+  }
+}
+
+function apiResponse<T>(data: T, status = 200): Response {
+  return Response.json(
+    {
+      success: status < 400,
+      data,
+      meta: {
+        timestamp: new Date().toISOString(),
+        version: '1.0',
+      },
+    } as ApiResponse<T>,
+    { status }
+  )
+}
+
+export const Route = createFileRoute('/api/users')({
+  server: {
+    handlers: {
+      GET: async () => {
+        const users = await db.users.findAll()
+        return apiResponse(users)
+      },
+    },
+  },
+})
+```
+
+### API Versioning
+
+```tsx
+export const Route = createFileRoute('/api/v1/users')({
+  server: {
+    handlers: {
+      GET: async () => {
+        // Version 1 implementation
+        return Response.json(await db.users.findAll())
+      },
+    },
+  },
+})
+
+export const RouteV2 = createFileRoute('/api/v2/users')({
+  server: {
+    handlers: {
+      GET: async () => {
+        // Version 2 with different response format
+        const users = await db.users.findAllWithProfiles()
+        return Response.json(users)
+      },
+    },
+  },
+})
+```
+
+## Best Practices
+
+1. **Use Appropriate HTTP Methods**
+   - GET for reading data
+   - POST for creating resources
+   - PUT/PATCH for updating resources
+   - DELETE for removing resources
+
+2. **Return Proper Status Codes**
+   - 200: Success
+   - 201: Created
+   - 204: No Content
+   - 400: Bad Request
+   - 401: Unauthorized
+   - 403: Forbidden
+   - 404: Not Found
+   - 500: Server Error
+
+3. **Validate Input**
+   - Always validate request data
+   - Return meaningful error messages
+   - Use validation libraries
+
+4. **Handle Errors Gracefully**
+   - Catch and handle all errors
+   - Don't expose internal errors to clients
+   - Log errors for debugging
+
+5. **Secure Your APIs**
+   - Implement authentication
+   - Use rate limiting
+   - Validate API keys
+   - Enable CORS appropriately
+
+6. **Document Your APIs**
+   - Use consistent naming
+   - Document parameters and responses
+   - Provide examples
+
+7. **Performance**
+   - Implement pagination
+   - Use caching headers
+   - Optimize database queries
+
+## Next Steps
+
+- Learn about [Middleware](./middleware) for API routes
+- Explore [Server Functions](./server-functions)
+- See [Deployment](./deployment) options

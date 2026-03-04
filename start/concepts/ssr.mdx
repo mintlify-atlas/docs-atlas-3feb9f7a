@@ -1,0 +1,598 @@
+---
+title: Server-Side Rendering (SSR)
+description: Learn how TanStack Start implements server-side rendering for improved performance and SEO.
+---
+
+# Server-Side Rendering (SSR)
+
+Server-Side Rendering (SSR) is a core feature of TanStack Start that renders your React components on the server before sending them to the client. This improves initial load times, SEO, and provides a better user experience.
+
+## What is SSR?
+
+SSR means:
+
+- **Server-side execution**: Components render on the server first
+- **HTML generation**: Full HTML is sent to the browser
+- **Hydration**: React attaches event handlers on the client
+- **Progressive enhancement**: Page works even before JavaScript loads
+- **SEO-friendly**: Search engines can index your content
+
+## How SSR Works in TanStack Start
+
+When a request comes in:
+
+1. **Request received**: Server receives HTTP request
+2. **Router matches**: TanStack Router finds matching routes
+3. **Loaders execute**: Route loaders run on the server
+4. **Components render**: React renders components to HTML
+5. **HTML sent**: Generated HTML is sent to browser
+6. **Hydration**: Client-side React takes over
+
+Reference: `packages/start-server-core/src/createStartHandler.ts:424-647`
+
+## Basic Setup
+
+TanStack Start handles SSR automatically:
+
+```tsx
+// src/router.tsx
+import { createRouter } from '@tanstack/react-router'
+import { routeTree } from './routeTree.gen'
+
+export function getRouter() {
+  const router = createRouter({
+    routeTree,
+    defaultPreload: 'intent',
+  })
+  return router
+}
+```
+
+```tsx
+// src/entry-server.tsx
+import { createStartHandler, defaultStreamHandler } from '@tanstack/react-start/server'
+
+export default createStartHandler({
+  handler: defaultStreamHandler,
+})
+```
+
+Reference: `examples/react/start-basic/src/router.tsx:1-16`
+
+## SSR with Data Loading
+
+Route loaders execute on the server during SSR:
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router'
+import { createServerFn } from '@tanstack/react-start'
+
+// Server function runs on the server
+const getPost = createServerFn({ method: 'GET' })
+  .inputValidator((id: string) => id)
+  .handler(async ({ data: postId }) => {
+    const post = await db.posts.findById(postId)
+    return post
+  })
+
+// Loader runs on the server during SSR
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    const post = await getPost({ data: params.postId })
+    return { post }
+  },
+  component: PostPage,
+})
+
+function PostPage() {
+  const { post } = Route.useLoaderData()
+  // This HTML is rendered on the server
+  return (
+    <article>
+      <h1>{post.title}</h1>
+      <div>{post.content}</div>
+    </article>
+  )
+}
+```
+
+## Hydration
+
+Hydration is the process of attaching React event handlers to server-rendered HTML:
+
+```tsx
+// Client entry point
+import { StartClient } from '@tanstack/react-start'
+import { hydrateRoot } from 'react-dom/client'
+import { getRouter } from './router'
+
+const router = getRouter()
+
+hydrateRoot(
+  document.getElementById('root')!,
+  <StartClient router={router} />
+)
+```
+
+During hydration:
+
+1. React compares server HTML with client render
+2. Event listeners are attached to existing DOM
+3. Application becomes interactive
+4. Client-side navigation is enabled
+
+## SSR Context
+
+Access server-side context in your components:
+
+```tsx
+import { createMiddleware, createServerFn } from '@tanstack/react-start'
+
+// Add data to SSR context via middleware
+const requestMiddleware = createMiddleware()
+  .server(async ({ request, next }) => {
+    const userAgent = request.headers.get('user-agent')
+    return next({ 
+      context: { 
+        userAgent,
+        serverTime: Date.now() 
+      } 
+    })
+  })
+
+// Access in server functions
+const getServerInfo = createServerFn({ method: 'GET' })
+  .middleware([requestMiddleware])
+  .handler(async ({ context }) => {
+    return {
+      userAgent: context.userAgent,
+      serverTime: context.serverTime,
+    }
+  })
+```
+
+Reference: `packages/start-server-core/src/createStartHandler.ts:596-600`
+
+## SSR Utilities
+
+TanStack Start provides utilities for SSR:
+
+### Router SSR Utils
+
+```tsx
+import { attachRouterServerSsrUtils } from '@tanstack/start-server-core'
+
+// Attached automatically by createStartHandler
+attachRouterServerSsrUtils({
+  router,
+  manifest, // Asset manifest for preloads/styles
+})
+```
+
+This enables:
+
+- Asset preloading
+- Critical CSS injection
+- Deferred data streaming
+
+Reference: `packages/start-server-core/src/createStartHandler.ts:568-571`
+
+## Preventing SSR for Specific Components
+
+Some components should only render on the client:
+
+```tsx
+import { ClientOnly } from '@tanstack/react-router'
+
+function MyPage() {
+  return (
+    <div>
+      <h1>This renders on server</h1>
+      
+      <ClientOnly fallback={<div>Loading...</div>}>
+        {() => (
+          <div>
+            {/* This only renders on client */}
+            {/* Useful for: */}
+            {/* - Browser APIs (window, localStorage) */}
+            {/* - Third-party widgets */}
+            {/* - Heavy interactive components */}
+            <BrowserOnlyComponent />
+          </div>
+        )}
+      </ClientOnly>
+    </div>
+  )
+}
+```
+
+## Head Management
+
+Manage document head during SSR:
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    const post = await getPost({ data: params.postId })
+    return { post }
+  },
+  head: ({ loaderData }) => ({
+    meta: [
+      {
+        title: loaderData.post.title,
+      },
+      {
+        name: 'description',
+        content: loaderData.post.excerpt,
+      },
+      {
+        property: 'og:title',
+        content: loaderData.post.title,
+      },
+      {
+        property: 'og:image',
+        content: loaderData.post.imageUrl,
+      },
+    ],
+  }),
+  component: PostPage,
+})
+```
+
+## Headers and Status Codes
+
+Control HTTP response during SSR:
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router'
+import { getResponse } from '@tanstack/react-start/server'
+
+export const Route = createFileRoute('/api/posts/$postId')({
+  loader: async ({ params }) => {
+    const response = getResponse()
+    
+    const post = await getPost({ data: params.postId })
+    
+    if (!post) {
+      response.status = 404
+      throw new Error('Post not found')
+    }
+    
+    // Set cache headers
+    response.headers.set('Cache-Control', 'public, max-age=3600')
+    
+    return { post }
+  },
+})
+```
+
+Reference: `packages/start-server-core/src/createStartHandler.ts:582-584`
+
+## Error Handling
+
+Handle errors during SSR:
+
+```tsx
+import { createFileRoute, ErrorComponent } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    const post = await getPost({ data: params.postId })
+    
+    if (!post) {
+      throw new Error('Post not found')
+    }
+    
+    return { post }
+  },
+  errorComponent: ({ error }) => (
+    <div>
+      <h1>Error Loading Post</h1>
+      <p>{error.message}</p>
+    </div>
+  ),
+  component: PostPage,
+})
+```
+
+## Deferred Data
+
+Defer non-critical data to speed up initial render:
+
+```tsx
+import { Await, createFileRoute } from '@tanstack/react-router'
+import { Suspense } from 'react'
+
+export const Route = createFileRoute('/dashboard')({
+  loader: async () => {
+    // Load critical data immediately
+    const user = await getUser()
+    
+    // Defer slow data
+    const analytics = getAnalytics() // Don't await
+    
+    return { 
+      user,
+      analytics, // Promise passed to component
+    }
+  },
+  component: Dashboard,
+})
+
+function Dashboard() {
+  const { user, analytics } = Route.useLoaderData()
+  
+  return (
+    <div>
+      {/* Rendered immediately */}
+      <h1>Welcome, {user.name}</h1>
+      
+      {/* Rendered when promise resolves */}
+      <Suspense fallback={<div>Loading analytics...</div>}>
+        <Await promise={analytics}>
+          {(data) => <AnalyticsChart data={data} />}
+        </Await>
+      </Suspense>
+    </div>
+  )
+}
+```
+
+Reference: `examples/react/start-basic/src/routes/deferred.tsx:18-29`
+
+## Memory Management
+
+TanStack Start automatically cleans up router state after SSR:
+
+```tsx
+// Automatic cleanup after response is sent
+router.serverSsr?.cleanup()
+```
+
+Reference: `packages/start-server-core/src/createStartHandler.ts:637-645`
+
+## Asset Preloading
+
+TanStack Start automatically preloads critical assets:
+
+```html
+<!-- Generated automatically during SSR -->
+<link rel="modulepreload" href="/assets/index-abc123.js" />
+<link rel="stylesheet" href="/assets/index-def456.css" />
+```
+
+The manifest is built during bundling and used during SSR:
+
+```tsx
+const manifest = await resolveManifest(
+  matchedRoutes,
+  transformFn,
+  cache,
+)
+```
+
+Reference: `packages/start-server-core/src/createStartHandler.ts:561-565`
+
+## Development vs Production
+
+### Development
+
+- Fresh manifest on each request
+- Includes route-specific dev styles
+- Source maps enabled
+- Detailed error messages
+
+```tsx
+if (process.env.TSS_DEV_SERVER === 'true') {
+  return getStartManifest(matchedRoutes)
+}
+```
+
+Reference: `packages/start-server-core/src/createStartHandler.ts:165-167`
+
+### Production
+
+- Cached manifest (computed once)
+- Minified bundles
+- Optimized asset URLs
+- Production error handling
+
+```tsx
+if (!baseManifestPromise) {
+  baseManifestPromise = getStartManifest()
+}
+```
+
+Reference: `packages/start-server-core/src/createStartHandler.ts:169-171`
+
+## CDN Integration
+
+Transform asset URLs for CDN hosting:
+
+```tsx
+import { createStartHandler, defaultStreamHandler } from '@tanstack/react-start/server'
+
+export default createStartHandler({
+  handler: defaultStreamHandler,
+  transformAssetUrls: 'https://cdn.example.com',
+})
+
+// Or with dynamic regions
+export default createStartHandler({
+  handler: defaultStreamHandler,
+  transformAssetUrls: {
+    transform: ({ url, type }) => {
+      const region = getRegion()
+      return `https://cdn-${region}.example.com${url}`
+    },
+    cache: false, // Transform per-request
+  },
+})
+```
+
+Reference: `packages/start-server-core/src/createStartHandler.ts:59-111`
+
+## Shell Mode
+
+Generate an empty shell for static hosting:
+
+```tsx
+// Detect shell mode
+let isShell = process.env.TSS_SHELL === 'true'
+if (process.env.TSS_PRERENDERING === 'true' && !isShell) {
+  isShell = request.headers.get('x-tss-shell') === 'true'
+}
+
+router.update({
+  isShell,
+  // ...
+})
+```
+
+Reference: `packages/start-server-core/src/createStartHandler.ts:474-477`
+
+## Best Practices
+
+### 1. Keep Loaders Fast
+
+```tsx
+// ✅ Good - load only what's needed
+export const Route = createFileRoute('/posts')({
+  loader: async () => {
+    // Load summary data
+    const posts = await db.posts.findMany({
+      select: { id: true, title: true, excerpt: true },
+      take: 20,
+    })
+    return { posts }
+  },
+})
+
+// ❌ Bad - loading too much
+export const Route = createFileRoute('/posts')({
+  loader: async () => {
+    // Loading full content for all posts
+    const posts = await db.posts.findMany()
+    return { posts }
+  },
+})
+```
+
+### 2. Use Deferred Data
+
+```tsx
+// Defer non-critical data
+export const Route = createFileRoute('/product/$id')({
+  loader: async ({ params }) => {
+    // Critical data - await
+    const product = await getProduct(params.id)
+    
+    // Non-critical - defer
+    const recommendations = getRecommendations(params.id)
+    const reviews = getReviews(params.id)
+    
+    return { product, recommendations, reviews }
+  },
+})
+```
+
+### 3. Set Appropriate Cache Headers
+
+```tsx
+import { getResponse } from '@tanstack/react-start/server'
+
+export const Route = createFileRoute('/blog')({
+  loader: async () => {
+    const response = getResponse()
+    // Cache for 1 hour, revalidate in background
+    response.headers.set(
+      'Cache-Control',
+      'public, max-age=3600, stale-while-revalidate=86400'
+    )
+    const posts = await getPosts()
+    return { posts }
+  },
+})
+```
+
+### 4. Handle Errors Gracefully
+
+```tsx
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    const post = await getPost({ data: params.postId })
+    
+    if (!post) {
+      const response = getResponse()
+      response.status = 404
+      throw new Error('Post not found')
+    }
+    
+    return { post }
+  },
+  errorComponent: ErrorBoundary,
+})
+```
+
+## Performance Tips
+
+### 1. Parallel Data Loading
+
+```tsx
+export const Route = createFileRoute('/dashboard')({
+  loader: async () => {
+    // Load in parallel
+    const [user, posts, analytics] = await Promise.all([
+      getUser(),
+      getPosts(),
+      getAnalytics(),
+    ])
+    return { user, posts, analytics }
+  },
+})
+```
+
+### 2. Database Query Optimization
+
+```tsx
+export const Route = createFileRoute('/posts')({
+  loader: async () => {
+    // Select only needed fields
+    const posts = await db.posts.findMany({
+      select: {
+        id: true,
+        title: true,
+        excerpt: true,
+        author: {
+          select: { name: true, avatar: true },
+        },
+      },
+      take: 20,
+    })
+    return { posts }
+  },
+})
+```
+
+### 3. Smart Preloading
+
+```tsx
+export function getRouter() {
+  return createRouter({
+    routeTree,
+    // Preload on hover/focus
+    defaultPreload: 'intent',
+    // Preload after a delay
+    defaultPreloadDelay: 50,
+  })
+}
+```
+
+## Next Steps
+
+- Learn about [Streaming](./streaming) for progressive rendering
+- Explore [Server Functions](./server-functions) for data mutations
+- Review [Deployment](./deployment) for production hosting
+- Understand [Full-Stack Architecture](./full-stack) for the complete picture

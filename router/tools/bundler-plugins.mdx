@@ -1,0 +1,498 @@
+---
+title: Bundler Plugins
+description: Integrate TanStack Router with Webpack, ESBuild, Rspack, or other bundlers
+---
+
+TanStack Router provides universal bundler plugins for Webpack, ESBuild, and Rspack through a single package. These plugins enable automatic route generation, code splitting, and hot module replacement across different bundlers.
+
+## Installation
+
+Install the universal plugin package:
+
+```bash
+npm install -D @tanstack/router-plugin
+# or
+pnpm add -D @tanstack/router-plugin
+# or
+yarn add -D @tanstack/router-plugin
+```
+
+This single package provides plugins for all supported bundlers.
+
+## Webpack Plugin
+
+### Basic Setup
+
+Add the plugin to your `webpack.config.js`:
+
+```js
+const { TanStackRouterWebpack } = require('@tanstack/router-plugin/webpack')
+
+module.exports = {
+  plugins: [
+    TanStackRouterWebpack(),
+  ],
+}
+```
+
+With TypeScript:
+
+```ts
+import { TanStackRouterWebpack } from '@tanstack/router-plugin/webpack'
+import type { Configuration } from 'webpack'
+
+const config: Configuration = {
+  plugins: [
+    TanStackRouterWebpack(),
+  ],
+}
+
+export default config
+```
+
+### Configuration
+
+Pass configuration options to the plugin:
+
+```ts
+import { TanStackRouterWebpack } from '@tanstack/router-plugin/webpack'
+
+const config: Configuration = {
+  plugins: [
+    TanStackRouterWebpack({
+      target: 'react',
+      routesDirectory: './src/routes',
+      generatedRouteTree: './src/routeTree.gen.ts',
+      autoCodeSplitting: true,
+    }),
+  ],
+}
+
+export default config
+```
+
+### Specialized Webpack Plugins
+
+Use separate plugins for generation and code splitting:
+
+```ts
+import {
+  TanStackRouterGeneratorWebpack,
+  TanStackRouterCodeSplitterWebpack,
+} from '@tanstack/router-plugin/webpack'
+
+const config: Configuration = {
+  plugins: [
+    TanStackRouterGeneratorWebpack({
+      routesDirectory: './src/routes',
+    }),
+    TanStackRouterCodeSplitterWebpack({
+      autoCodeSplitting: true,
+    }),
+  ],
+}
+
+export default config
+```
+
+### With React
+
+```js
+const { TanStackRouterWebpack } = require('@tanstack/router-plugin/webpack')
+const ReactRefreshWebpackPlugin = require('@pmmmwh/react-refresh-webpack-plugin')
+
+module.exports = {
+  plugins: [
+    new ReactRefreshWebpackPlugin(),
+    TanStackRouterWebpack({ target: 'react' }),
+  ],
+  module: {
+    rules: [
+      {
+        test: /\.[jt]sx?$/,
+        exclude: /node_modules/,
+        use: {
+          loader: 'babel-loader',
+          options: {
+            presets: [
+              ['@babel/preset-react', { runtime: 'automatic' }],
+              '@babel/preset-typescript',
+            ],
+          },
+        },
+      },
+    ],
+  },
+}
+```
+
+## ESBuild Plugin
+
+### Basic Setup
+
+Add the plugin to your ESBuild configuration:
+
+```js
+const { build } = require('esbuild')
+const { TanStackRouterEsbuild } = require('@tanstack/router-plugin/esbuild')
+
+build({
+  entryPoints: ['src/index.tsx'],
+  bundle: true,
+  outfile: 'dist/bundle.js',
+  plugins: [TanStackRouterEsbuild()],
+})
+```
+
+With TypeScript:
+
+```ts
+import { build } from 'esbuild'
+import { TanStackRouterEsbuild } from '@tanstack/router-plugin/esbuild'
+
+await build({
+  entryPoints: ['src/index.tsx'],
+  bundle: true,
+  outfile: 'dist/bundle.js',
+  plugins: [TanStackRouterEsbuild()],
+})
+```
+
+### Configuration
+
+```ts
+import { TanStackRouterEsbuild } from '@tanstack/router-plugin/esbuild'
+
+await build({
+  plugins: [
+    TanStackRouterEsbuild({
+      target: 'react',
+      routesDirectory: './src/routes',
+      generatedRouteTree: './src/routeTree.gen.ts',
+      autoCodeSplitting: true,
+    }),
+  ],
+})
+```
+
+### Specialized ESBuild Plugins
+
+```ts
+import {
+  TanStackRouterGeneratorEsbuild,
+  TanStackRouterCodeSplitterEsbuild,
+} from '@tanstack/router-plugin/esbuild'
+
+await build({
+  plugins: [
+    TanStackRouterGeneratorEsbuild(),
+    TanStackRouterCodeSplitterEsbuild(),
+  ],
+})
+```
+
+### With React and JSX
+
+```ts
+import { build } from 'esbuild'
+import { TanStackRouterEsbuild } from '@tanstack/router-plugin/esbuild'
+
+await build({
+  entryPoints: ['src/index.tsx'],
+  bundle: true,
+  outfile: 'dist/bundle.js',
+  plugins: [TanStackRouterEsbuild({ target: 'react' })],
+  loader: {
+    '.tsx': 'tsx',
+    '.ts': 'ts',
+  },
+  jsx: 'automatic',
+})
+```
+
+## Rspack Plugin
+
+### Basic Setup
+
+Add the plugin to your Rspack configuration:
+
+```js
+const { TanStackRouterRspack } = require('@tanstack/router-plugin/rspack')
+
+module.exports = {
+  plugins: [
+    TanStackRouterRspack(),
+  ],
+}
+```
+
+With TypeScript and Rsbuild:
+
+```ts
+import { defineConfig } from '@rsbuild/core'
+import { pluginReact } from '@rsbuild/plugin-react'
+import { TanStackRouterRspack } from '@tanstack/router-plugin/rspack'
+
+export default defineConfig({
+  plugins: [pluginReact()],
+  tools: {
+    rspack: {
+      plugins: [TanStackRouterRspack()],
+    },
+  },
+})
+```
+
+### Configuration
+
+```ts
+import { TanStackRouterRspack } from '@tanstack/router-plugin/rspack'
+
+export default defineConfig({
+  tools: {
+    rspack: {
+      plugins: [
+        TanStackRouterRspack({
+          target: 'react',
+          routesDirectory: './src/routes',
+          generatedRouteTree: './src/routeTree.gen.ts',
+          autoCodeSplitting: true,
+        }),
+      ],
+    },
+  },
+})
+```
+
+### Specialized Rspack Plugins
+
+```ts
+import {
+  TanStackRouterGeneratorRspack,
+  TanStackRouterCodeSplitterRspack,
+} from '@tanstack/router-plugin/rspack'
+
+export default defineConfig({
+  tools: {
+    rspack: {
+      plugins: [
+        TanStackRouterGeneratorRspack(),
+        TanStackRouterCodeSplitterRspack(),
+      ],
+    },
+  },
+})
+```
+
+## Configuration Options
+
+All bundler plugins support the same configuration options:
+
+<ResponseField name="target" type="'react' | 'solid' | 'vue'" default="react">
+  The framework you're using with TanStack Router
+</ResponseField>
+
+<ResponseField name="routesDirectory" type="string" default="./src/routes">
+  The directory containing your route files
+</ResponseField>
+
+<ResponseField name="generatedRouteTree" type="string" default="./src/routeTree.gen.ts">
+  Where to output the generated route tree file
+</ResponseField>
+
+<ResponseField name="routeFilePrefix" type="string">
+  Optional prefix for route files
+</ResponseField>
+
+<ResponseField name="routeFileIgnorePrefix" type="string" default="-">
+  Files starting with this prefix will be ignored
+</ResponseField>
+
+<ResponseField name="quoteStyle" type="'single' | 'double'" default="single">
+  Quote style for generated code
+</ResponseField>
+
+<ResponseField name="semicolons" type="boolean" default={false}>
+  Whether to include semicolons in generated code
+</ResponseField>
+
+<ResponseField name="autoCodeSplitting" type="boolean">
+  Automatically enable code splitting for routes
+</ResponseField>
+
+<ResponseField name="disableTypes" type="boolean" default={false}>
+  Disable TypeScript type generation
+</ResponseField>
+
+<ResponseField name="disableLogging" type="boolean" default={false}>
+  Disable plugin logging output
+</ResponseField>
+
+<ResponseField name="codeSplittingOptions" type="CodeSplittingOptions">
+  Advanced code splitting configuration:
+  
+  ```ts
+  {
+    defaultBehavior: [
+      ['component'],
+      ['pendingComponent'],
+      ['errorComponent'],
+      ['notFoundComponent']
+    ],
+    splitBehavior: ({ routeId }) => {
+      // Custom logic per route
+      return undefined // use default
+    },
+    deleteNodes: ['loader'],
+    addHmr: true
+  }
+  ```
+</ResponseField>
+
+## Code Splitting
+
+All plugins support automatic code splitting:
+
+```ts
+// Any bundler plugin
+{
+  autoCodeSplitting: true,
+  codeSplittingOptions: {
+    defaultBehavior: [
+      ['component'],
+      ['pendingComponent'],
+      ['errorComponent', 'notFoundComponent'],
+    ],
+    splitBehavior: ({ routeId }) => {
+      // Don't split critical routes
+      if (routeId === '/' || routeId === '/login') {
+        return undefined
+      }
+      // Custom split for admin
+      if (routeId.startsWith('/admin')) {
+        return [['component', 'pendingComponent']]
+      }
+      return undefined // use default
+    },
+  },
+}
+```
+
+## TypeScript Support
+
+All plugins generate TypeScript types automatically. Ensure your `tsconfig.json` includes the generated files:
+
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "moduleResolution": "bundler"
+  },
+  "include": [
+    "src",
+    "src/routeTree.gen.ts"
+  ]
+}
+```
+
+## Validation with Zod
+
+The plugins use Zod for configuration validation:
+
+```ts
+import { configSchema } from '@tanstack/router-plugin'
+
+// Validate your config
+const config = configSchema.parse({
+  target: 'react',
+  routesDirectory: './src/routes',
+})
+```
+
+## Using Unplugin Directly
+
+The plugins are built with [unplugin](https://github.com/unjs/unplugin), which provides a unified plugin interface. You can use the raw unplugin factories:
+
+```ts
+import { createWebpackPlugin } from 'unplugin'
+import { unpluginRouterGeneratorFactory } from '@tanstack/router-plugin'
+
+const customPlugin = createWebpackPlugin(unpluginRouterGeneratorFactory)
+```
+
+## Comparison with CLI
+
+Bundler plugins vs CLI (`tsr watch`):
+
+| Feature | Bundler Plugin | CLI |
+|---------|---------------|-----|
+| Route generation | ✅ | ✅ |
+| Watch mode | ✅ (automatic) | ✅ (manual) |
+| HMR | ✅ | ❌ |
+| Code splitting | ✅ | ❌ |
+| Build integration | ✅ (native) | ❌ (separate process) |
+| Setup complexity | Medium | Low |
+
+**Recommendation**: Use bundler plugins for better integration and features. Use CLI only if your bundler is not supported.
+
+## Comparison with Vite Plugin
+
+The Vite plugin is the recommended choice for Vite projects:
+
+```ts
+// ✅ Recommended for Vite
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
+
+// ⚠️ Also works, but use Vite-specific export
+import { TanStackRouterWebpack } from '@tanstack/router-plugin/webpack'
+```
+
+See [Vite Plugin](/router/tools/vite-plugin) for Vite-specific documentation.
+
+## Troubleshooting
+
+### Plugin not working
+
+1. Verify the plugin is properly imported for your bundler
+2. Check that configuration options are valid
+3. Ensure route files exist in the configured directory
+4. Check bundler logs for errors
+
+### Routes not generating
+
+1. Verify `routesDirectory` path is correct
+2. Check file naming conventions match expected patterns
+3. Ensure bundler is running in watch/dev mode
+4. Check for configuration validation errors
+
+### Type errors
+
+1. Include generated route tree in `tsconfig.json`
+2. Restart your TypeScript server
+3. Verify `disableTypes` is not set to `true`
+4. Check that route files have valid TypeScript
+
+### Code splitting not working
+
+1. Set `autoCodeSplitting: true`
+2. Verify `codeSplittingOptions` configuration is valid
+3. Check that route components are properly exported
+4. Ensure bundler supports dynamic imports
+
+### Webpack-specific issues
+
+1. Check React Refresh plugin order
+2. Verify babel configuration includes JSX transform
+3. Ensure source maps are enabled for debugging
+
+### ESBuild-specific issues
+
+1. Configure JSX transform: `jsx: 'automatic'`
+2. Set correct loaders for `.tsx` and `.ts` files
+3. ESBuild plugin support is limited - consider Vite
+
+### Rspack-specific issues
+
+1. Use within `tools.rspack.plugins` array
+2. Ensure Rsbuild React plugin is configured
+3. Check Rspack version compatibility (>= 1.0.2)

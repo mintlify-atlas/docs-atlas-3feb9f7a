@@ -1,0 +1,244 @@
+---
+title: Rspack Plugin API
+---
+
+# Rspack Plugin
+
+Rspack plugin for TanStack Router with route generation and code splitting.
+
+## Installation
+
+```bash
+npm install @tanstack/router-plugin
+```
+
+## Basic Usage
+
+```js
+// rspack.config.js
+const { TanStackRouterRspack } = require('@tanstack/router-plugin/rspack')
+
+module.exports = {
+  plugins: [
+    TanStackRouterRspack()
+  ]
+}
+```
+
+## Configuration Options
+
+Same options as the Vite plugin:
+
+<ParamField path="routesDirectory" type="string">
+  Directory containing route files.
+  
+  **Default:** `'./src/routes'`
+</ParamField>
+
+<ParamField path="generatedRouteTree" type="string">
+  Output path for generated route tree.
+  
+  **Default:** `'./src/routeTree.gen.ts'`
+</ParamField>
+
+<ParamField path="routeFileIgnorePrefix" type="string">
+  Prefix to ignore when generating routes.
+  
+  **Default:** `'-'`
+</ParamField>
+
+<ParamField path="autoCodeSplitting" type="boolean">
+  Enable automatic code splitting.
+  
+  **Default:** `false`
+</ParamField>
+
+<ParamField path="codeSplittingOptions" type="CodeSplittingOptions">
+  Code splitting configuration.
+</ParamField>
+
+## Examples
+
+### Basic Setup
+
+```js
+// rspack.config.js
+const { TanStackRouterRspack } = require('@tanstack/router-plugin/rspack')
+
+module.exports = {
+  entry: './src/index.tsx',
+  output: {
+    path: path.resolve(__dirname, 'dist'),
+    filename: 'bundle.js'
+  },
+  plugins: [
+    TanStackRouterRspack()
+  ],
+  module: {
+    rules: [
+      {
+        test: /\.tsx?$/,
+        use: 'builtin:swc-loader',
+        exclude: /node_modules/
+      }
+    ]
+  }
+}
+```
+
+### With Code Splitting
+
+```js
+const { TanStackRouterRspack } = require('@tanstack/router-plugin/rspack')
+
+module.exports = {
+  plugins: [
+    TanStackRouterRspack({
+      autoCodeSplitting: true,
+      codeSplittingOptions: {
+        defaultBehavior: [
+          ['component'],
+          ['loader'],
+          ['pendingComponent', 'errorComponent']
+        ]
+      }
+    })
+  ],
+  optimization: {
+    splitChunks: {
+      chunks: 'all'
+    }
+  }
+}
+```
+
+### TypeScript Configuration
+
+```js
+const { TanStackRouterRspack } = require('@tanstack/router-plugin/rspack')
+
+module.exports = {
+  plugins: [
+    TanStackRouterRspack({
+      routesDirectory: './src/pages',
+      generatedRouteTree: './src/pages/routeTree.gen.ts',
+      quoteStyle: 'double',
+      semicolons: true
+    })
+  ]
+}
+```
+
+### Development Mode
+
+```js
+const { TanStackRouterRspack } = require('@tanstack/router-plugin/rspack')
+
+module.exports = {
+  mode: 'development',
+  devtool: 'source-map',
+  plugins: [
+    TanStackRouterRspack({
+      codeSplittingOptions: {
+        addHmr: true
+      }
+    })
+  ],
+  devServer: {
+    hot: true,
+    port: 3000
+  }
+}
+```
+
+### Production Build
+
+```js
+const { TanStackRouterRspack } = require('@tanstack/router-plugin/rspack')
+
+module.exports = {
+  mode: 'production',
+  plugins: [
+    TanStackRouterRspack({
+      autoCodeSplitting: true,
+      codeSplittingOptions: {
+        defaultBehavior: [
+          ['component'],
+          ['loader'],
+          ['pendingComponent', 'errorComponent']
+        ]
+      }
+    })
+  ],
+  optimization: {
+    minimize: true,
+    splitChunks: {
+      chunks: 'all',
+      cacheGroups: {
+        routes: {
+          test: /[\\/]routes[\\/]/,
+          priority: -10
+        },
+        vendor: {
+          test: /[\\/]node_modules[\\/]/,
+          priority: -20
+        }
+      }
+    }
+  }
+}
+```
+
+## Rspack-Specific Features
+
+### Using SWC Loader
+
+```js
+module.exports = {
+  plugins: [
+    TanStackRouterRspack()
+  ],
+  module: {
+    rules: [
+      {
+        test: /\.tsx?$/,
+        use: 'builtin:swc-loader',
+        options: {
+          jsc: {
+            parser: {
+              syntax: 'typescript',
+              tsx: true
+            },
+            transform: {
+              react: {
+                runtime: 'automatic'
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+### Lightning CSS
+
+```js
+module.exports = {
+  plugins: [
+    TanStackRouterRspack()
+  ],
+  experiments: {
+    css: true
+  },
+  module: {
+    rules: [
+      {
+        test: /\.css$/,
+        type: 'css/auto'
+      }
+    ]
+  }
+}
+```

@@ -1,0 +1,494 @@
+---
+title: Loaders
+---
+
+# Loaders
+
+Loaders are functions that fetch data for a route before it renders. They're the backbone of TanStack Router's data loading strategy, providing type-safe, cacheable, and parallel data fetching.
+
+## Why Loaders Matter
+
+Loaders solve critical data loading challenges:
+
+- **Fetch before render** - Data loads before components mount
+- **Type-safe data flow** - Return types automatically inferred
+- **Automatic caching** - Prevents redundant fetches
+- **Parallel loading** - Multiple loaders run concurrently
+- **Cancellation** - Automatic cleanup on navigation away
+
+This eliminates loading states scattered throughout components and provides a better user experience.
+
+## Defining Loaders
+
+Loaders are defined using the `loader` option on routes.
+
+### Basic Loader
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/posts')({
+  loader: async () => {
+    const response = await fetch('/api/posts')
+    return response.json()
+  },
+  component: PostsComponent,
+})
+
+function PostsComponent() {
+  const posts = Route.useLoaderData()
+  // posts is fully typed based on loader return value!
+  
+  return (
+    <div>
+      {posts.map(post => (
+        <div key={post.id}>{post.title}</div>
+      ))}
+    </div>
+  )
+}
+```
+
+### Loader with Parameters
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    const response = await fetch(`/api/posts/${params.postId}`)
+    return response.json()
+  },
+})
+```
+
+Path parameters are available in the loader context.
+
+### Loader with Context
+
+Access router context in loaders:
+
+```tsx
+export const Route = createFileRoute('/posts')({
+  loader: async ({ context }) => {
+    // Access queryClient, auth, etc. from context
+    return context.queryClient.fetchQuery({
+      queryKey: ['posts'],
+      queryFn: fetchPosts,
+    })
+  },
+})
+```
+
+## Loader Context
+
+Loaders receive a rich context object defined in `packages/router-core/src/route.ts:1418-1453`:
+
+```typescript
+export interface LoaderFnContext {
+  abortController: AbortController
+  preload: boolean
+  params: AllParams
+  deps: LoaderDeps
+  context: RouteContext
+  location: ParsedLocation
+  cause: 'preload' | 'enter' | 'stay'
+  route: AnyRoute
+  parentMatchPromise?: Promise<ParentMatch>
+}
+```
+
+### Available Context Properties
+
+```tsx
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ 
+    params,           // Path parameters
+    context,          // Router context + parent context
+    deps,             // Loader dependencies
+    abortController,  // For cancellation
+    location,         // Current location (no search to discourage skipping loaderDeps)
+    preload,          // true if preloading
+    cause,            // 'enter' | 'stay' | 'preload'
+    parentMatchPromise, // Await parent loader
+  }) => {
+    const post = await fetch(
+      `/api/posts/${params.postId}`,
+      { signal: abortController.signal }
+    )
+    return post.json()
+  },
+})
+```
+
+## Loader Dependencies
+
+Loader dependencies control when a loader re-runs.
+
+### Defining Dependencies
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router'
+import { z } from 'zod'
+
+const searchSchema = z.object({
+  page: z.number().default(1),
+  filter: z.string().optional(),
+})
+
+export const Route = createFileRoute('/posts')({
+  validateSearch: searchSchema,
+  
+  // Define which search params trigger loader
+  loaderDeps: ({ search }) => ({
+    page: search.page,
+    filter: search.filter,
+  }),
+  
+  loader: async ({ deps }) => {
+    // Loader re-runs when page or filter changes
+    const response = await fetch(
+      `/api/posts?page=${deps.page}&filter=${deps.filter || ''}`
+    )
+    return response.json()
+  },
+})
+```
+
+<Note>
+Without `loaderDeps`, the loader only runs once per route match. Use `loaderDeps` to re-run loaders when specific values change.
+</Note>
+
+### Why Use loaderDeps?
+
+The `location` object in loader context doesn't include search params. This is intentional - it encourages you to explicitly declare dependencies:
+
+```tsx
+// ❌ Bad - bypasses dependency tracking
+loader: ({ location }) => {
+  const search = parseSearch(location.search)
+  return fetch(`/api?page=${search.page}`)
+}
+
+// ✅ Good - explicit dependencies
+loaderDeps: ({ search }) => ({ page: search.page }),
+loader: ({ deps }) => {
+  return fetch(`/api?page=${deps.page}`)
+}
+```
+
+This ensures caching works correctly.
+
+## Accessing Loader Data
+
+Use the `useLoaderData` hook to access loader results.
+
+### In Route Component
+
+```tsx
+function PostsComponent() {
+  const data = Route.useLoaderData()
+  // data is fully typed from loader return type
+  
+  return (
+    <div>
+      {data.posts.map(post => (
+        <div key={post.id}>{post.title}</div>
+      ))}
+    </div>
+  )
+}
+```
+
+### In Nested Components
+
+```tsx
+import { useLoaderData } from '@tanstack/react-router'
+
+function NestedComponent() {
+  const data = useLoaderData({ from: '/posts' })
+  // Specify which route's data to access
+  
+  return <div>{data.posts.length} posts</div>
+}
+```
+
+### Type-Safe Access
+
+Loader data types are automatically inferred:
+
+```tsx
+export const Route = createFileRoute('/posts')({
+  loader: async () => {
+    return {
+      posts: await fetchPosts(),
+      metadata: { total: 100, page: 1 },
+    }
+  },
+})
+
+function PostsComponent() {
+  const data = Route.useLoaderData()
+  // TypeScript knows:
+  // data.posts is Post[]
+  // data.metadata.total is number
+}
+```
+
+## Parallel Loaders
+
+Multiple route loaders run in parallel automatically.
+
+```tsx
+// Parent route loader
+export const ParentRoute = createFileRoute('/dashboard')({
+  loader: async () => {
+    return { user: await fetchUser() }
+  },
+})
+
+// Child route loader runs in parallel
+export const ChildRoute = createFileRoute('/dashboard/stats')({
+  loader: async () => {
+    return { stats: await fetchStats() }
+  },
+})
+```
+
+Both loaders start simultaneously. The route doesn't render until all loaders complete.
+
+### Awaiting Parent Loader
+
+Sometimes child loaders need parent data:
+
+```tsx
+export const ChildRoute = createFileRoute('/dashboard/settings')({
+  loader: async ({ parentMatchPromise }) => {
+    // Wait for parent loader to complete
+    const parentMatch = await parentMatchPromise
+    const userId = parentMatch.loaderData.user.id
+    
+    return { settings: await fetchUserSettings(userId) }
+  },
+})
+```
+
+This creates a sequential dependency when needed.
+
+## Loader Cancellation
+
+Loaders are automatically cancelled when navigating away.
+
+```tsx
+export const Route = createFileRoute('/posts')({
+  loader: async ({ abortController }) => {
+    const response = await fetch('/api/posts', {
+      signal: abortController.signal, // Cancelled on navigation
+    })
+    return response.json()
+  },
+})
+```
+
+Always pass `signal` to fetch requests for proper cleanup.
+
+## Error Handling
+
+Handle loader errors gracefully:
+
+```tsx
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    const response = await fetch(`/api/posts/${params.postId}`)
+    
+    if (!response.ok) {
+      throw new Error('Failed to load post')
+    }
+    
+    return response.json()
+  },
+  
+  errorComponent: ({ error, reset }) => (
+    <div>
+      <h2>Error Loading Post</h2>
+      <p>{error.message}</p>
+      <button onClick={reset}>Retry</button>
+    </div>
+  ),
+})
+```
+
+Errors thrown in loaders are caught by the route's error boundary.
+
+## Preloading
+
+Loaders can run before navigation starts:
+
+```tsx
+import { useRouter } from '@tanstack/react-router'
+
+function PostLink({ postId }: { postId: string }) {
+  const router = useRouter()
+  
+  return (
+    <Link
+      to="/posts/$postId"
+      params={{ postId }}
+      preload="intent" // Preload on hover/touchstart
+    >
+      View Post
+    </Link>
+  )
+}
+```
+
+When preloading, `context.preload` is `true` in the loader.
+
+See the [Prefetching guide](./prefetching) for more details.
+
+## Conditional Loading
+
+Control whether a loader runs:
+
+```tsx
+export const Route = createFileRoute('/posts')({
+  loader: async ({ context, preload }) => {
+    // Skip during preload
+    if (preload) return null
+    
+    // Skip if data already in cache
+    if (context.cache.has('posts')) {
+      return context.cache.get('posts')
+    }
+    
+    const posts = await fetchPosts()
+    context.cache.set('posts', posts)
+    return posts
+  },
+})
+```
+
+### shouldReload
+
+Control when cached data should reload:
+
+```tsx
+export const Route = createFileRoute('/posts')({
+  loader: async () => fetchPosts(),
+  
+  // Reload if navigating from a different route
+  shouldReload: ({ match }) => {
+    return match.cause !== 'stay'
+  },
+})
+```
+
+## Integration with React Query
+
+TanStack Router works great with React Query:
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router'
+import { queryOptions } from '@tanstack/react-query'
+
+const postsQueryOptions = queryOptions({
+  queryKey: ['posts'],
+  queryFn: fetchPosts,
+})
+
+export const Route = createFileRoute('/posts')({
+  loader: ({ context: { queryClient } }) => {
+    return queryClient.ensureQueryData(postsQueryOptions)
+  },
+  component: PostsComponent,
+})
+
+function PostsComponent() {
+  // Access via React Query for real-time updates
+  const { data } = useSuspenseQuery(postsQueryOptions)
+  
+  return (
+    <div>
+      {data.map(post => (
+        <div key={post.id}>{post.title}</div>
+      ))}
+    </div>
+  )
+}
+```
+
+This pattern:
+- Ensures data is loaded before render
+- Provides React Query's caching and refetching
+- Enables mutations and optimistic updates
+
+## Loader Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always use abortController.signal">
+    Pass the abort signal to fetch requests. This prevents memory leaks and unnecessary network requests when users navigate away.
+  </Accordion>
+
+  <Accordion title="Use loaderDeps for search params">
+    Explicitly declare which search params trigger loader re-runs. This ensures correct caching behavior.
+  </Accordion>
+
+  <Accordion title="Handle errors with errorComponent">
+    Every route with a loader should have an `errorComponent` to handle failures gracefully.
+  </Accordion>
+
+  <Accordion title="Leverage parallel loading">
+    Design loaders to be independent. Only use `parentMatchPromise` when child data truly depends on parent data.
+  </Accordion>
+
+  <Accordion title="Consider loader splitting">
+    For heavy data loads, split loaders across parent/child routes to show content progressively.
+  </Accordion>
+</AccordionGroup>
+
+## Loader vs beforeLoad
+
+Choose the right lifecycle hook:
+
+| Use Case | Hook | Why |
+|----------|------|-----|
+| Fetch data | `loader` | Designed for async data loading |
+| Authentication checks | `beforeLoad` | Runs first, can redirect before data loads |
+| Setting context | `beforeLoad` | Context available to loader |
+| Dependent data | `loader` | Use `parentMatchPromise` |
+| Side effects | `loader` | Has access to all route data |
+
+```tsx
+// ✅ Good separation
+export const Route = createFileRoute('/_auth/dashboard')({
+  beforeLoad: ({ context }) => {
+    // Auth check first
+    if (!context.auth.isAuthenticated) {
+      throw redirect({ to: '/login' })
+    }
+    // Add user to context
+    return { user: context.auth.getUser() }
+  },
+  loader: ({ context }) => {
+    // Fetch user data (we know user exists)
+    return fetchDashboard(context.user.id)
+  },
+})
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Caching" icon="server" href="./caching">
+    Learn about loader data caching strategies
+  </Card>
+  <Card title="Prefetching" icon="bolt" href="./prefetching">
+    Optimize performance with loader prefetching
+  </Card>
+  <Card title="Routes" icon="route" href="./routes">
+    Explore all route lifecycle options
+  </Card>
+  <Card title="Search Params" icon="magnifying-glass" href="./search-params">
+    Use search params in loader dependencies
+  </Card>
+</CardGroup>

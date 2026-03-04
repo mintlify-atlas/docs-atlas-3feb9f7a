@@ -1,0 +1,747 @@
+---
+title: Deployment
+description: Learn how to deploy TanStack Start applications to various hosting platforms.
+---
+
+# Deployment
+
+TanStack Start applications can be deployed to any hosting platform that supports Node.js. This guide covers deployment strategies, platform-specific configurations, and production optimizations.
+
+## Build Process
+
+Before deploying, build your application for production:
+
+```bash
+# Build the application
+pnpm build
+
+# Output structure:
+# .output/
+#   ├── public/          # Static assets
+#   │   ├── assets/      # JS, CSS bundles
+#   │   └── *.html       # Static pages (if prerendered)
+#   └── server/          # Server bundle
+#       └── index.mjs    # Server entry point
+```
+
+The build process:
+
+1. **Bundles client code** - Creates optimized JavaScript bundles
+2. **Bundles server code** - Creates a production server bundle
+3. **Generates manifests** - Creates asset manifests for SSR
+4. **Optimizes assets** - Minifies and compresses static files
+5. **Code splitting** - Splits code by route for optimal loading
+
+## Hosting Platforms
+
+### Nitro-based Deployment
+
+TanStack Start uses [Nitro](https://nitro.unjs.io/) for universal deployment:
+
+```tsx
+// vite.config.ts
+import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+import { defineConfig } from 'vite'
+import { nitro } from 'nitro/vite'
+
+export default defineConfig({
+  plugins: [
+    tanstackStart(),
+    nitro({
+      // Nitro configuration
+    }),
+  ],
+})
+```
+
+Reference: `examples/react/start-basic/vite.config.ts:1-22`
+
+### Vercel
+
+Deploy to Vercel with zero configuration:
+
+```json
+// package.json
+{
+  "scripts": {
+    "build": "vite build",
+    "start": "node .output/server/index.mjs"
+  }
+}
+```
+
+```json
+// vercel.json (optional)
+{
+  "buildCommand": "pnpm build",
+  "outputDirectory": ".output/public",
+  "framework": null
+}
+```
+
+Deployment steps:
+
+1. Install Vercel CLI: `pnpm add -g vercel`
+2. Run: `vercel`
+3. Follow the prompts
+
+### Netlify
+
+Configure Netlify deployment:
+
+```toml
+# netlify.toml
+[build]
+  command = "pnpm build"
+  publish = ".output/public"
+  functions = ".output/server"
+
+[[redirects]]
+  from = "/*"
+  to = "/.netlify/functions/server"
+  status = 200
+```
+
+### Cloudflare Workers
+
+Deploy to Cloudflare Workers:
+
+```typescript
+// nitro.config.ts
+import { defineNitroConfig } from 'nitropack/config'
+
+export default defineNitroConfig({
+  preset: 'cloudflare-pages',
+})
+```
+
+```toml
+# wrangler.toml
+name = "my-tanstack-app"
+compatibility_date = "2024-01-01"
+
+[build]
+command = "pnpm build"
+
+[site]
+bucket = ".output/public"
+```
+
+Deploy with Wrangler:
+
+```bash
+pnpm add -D wrangler
+pnpm wrangler pages deploy .output/public
+```
+
+### AWS Lambda
+
+Deploy to AWS Lambda:
+
+```typescript
+// nitro.config.ts
+import { defineNitroConfig } from 'nitropack/config'
+
+export default defineNitroConfig({
+  preset: 'aws-lambda',
+})
+```
+
+Deploy with AWS CDK:
+
+```typescript
+import * as cdk from 'aws-cdk-lib'
+import * as lambda from 'aws-cdk-lib/aws-lambda'
+import * as apigateway from 'aws-cdk-lib/aws-apigateway'
+
+const fn = new lambda.Function(this, 'TanStackStartFunction', {
+  runtime: lambda.Runtime.NODEJS_20_X,
+  handler: 'index.handler',
+  code: lambda.Code.fromAsset('.output/server'),
+})
+
+const api = new apigateway.LambdaRestApi(this, 'TanStackStartAPI', {
+  handler: fn,
+})
+```
+
+### Docker
+
+Deploy with Docker:
+
+```dockerfile
+# Dockerfile
+FROM node:20-alpine AS base
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Build stage
+FROM base AS builder
+WORKDIR /app
+
+# Copy package files
+COPY package.json pnpm-lock.yaml ./
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Copy source
+COPY . .
+
+# Build application
+RUN pnpm build
+
+# Production stage
+FROM base AS runner
+WORKDIR /app
+
+# Copy built application
+COPY --from=builder /app/.output ./.output
+COPY --from=builder /app/package.json ./
+
+# Set environment
+ENV NODE_ENV=production
+ENV PORT=3000
+
+EXPOSE 3000
+
+# Start server
+CMD ["node", ".output/server/index.mjs"]
+```
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - '3000:3000'
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://user:pass@db:5432/myapp
+    depends_on:
+      - db
+  
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: myapp
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:
+```
+
+### Self-hosted / VPS
+
+Deploy to a VPS with Node.js:
+
+```bash
+# On your server
+
+# 1. Clone and build
+git clone https://github.com/your-repo/your-app.git
+cd your-app
+pnpm install
+pnpm build
+
+# 2. Install PM2 for process management
+pnpm add -g pm2
+
+# 3. Start with PM2
+pm2 start .output/server/index.mjs --name tanstack-app
+
+# 4. Configure Nginx as reverse proxy
+sudo nano /etc/nginx/sites-available/tanstack-app
+```
+
+```nginx
+# /etc/nginx/sites-available/tanstack-app
+server {
+  listen 80;
+  server_name example.com;
+
+  location / {
+    proxy_pass http://localhost:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host $host;
+    proxy_cache_bypass $http_upgrade;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+  
+  # Serve static assets directly
+  location /_build/ {
+    alias /path/to/app/.output/public/_build/;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+  }
+}
+```
+
+```bash
+# Enable site and restart Nginx
+sudo ln -s /etc/nginx/sites-available/tanstack-app /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+
+# Configure PM2 to start on boot
+pm2 startup
+pm2 save
+```
+
+## Environment Variables
+
+Manage environment variables securely:
+
+### Development
+
+```bash
+# .env.local (not committed)
+DATABASE_URL=postgresql://localhost:5432/dev
+API_SECRET=dev-secret-key
+```
+
+### Production
+
+```bash
+# Set via platform UI or CLI
+
+# Vercel
+vercel env add DATABASE_URL production
+
+# Netlify
+netlify env:set DATABASE_URL "postgresql://..."
+
+# Cloudflare
+wrangler secret put DATABASE_URL
+
+# AWS
+aws lambda update-function-configuration \
+  --function-name my-function \
+  --environment Variables={DATABASE_URL=postgresql://...}
+```
+
+### Accessing in Code
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+
+// Environment variables are only available on the server
+const getConfig = createServerFn({ method: 'GET' })
+  .handler(() => {
+    return {
+      // ✅ Safe - server only
+      apiUrl: process.env.API_URL,
+      // ❌ Never expose secrets!
+      // apiKey: process.env.API_KEY,
+    }
+  })
+```
+
+## Asset Optimization
+
+### CDN Configuration
+
+Serve static assets from a CDN:
+
+```tsx
+// src/entry-server.tsx
+import { createStartHandler, defaultStreamHandler } from '@tanstack/react-start/server'
+
+export default createStartHandler({
+  handler: defaultStreamHandler,
+  transformAssetUrls: 'https://cdn.example.com',
+})
+```
+
+This transforms all asset URLs:
+
+```html
+<!-- Before -->
+<script type="module" src="/assets/index-abc123.js"></script>
+<link rel="stylesheet" href="/assets/index-def456.css" />
+
+<!-- After -->
+<script type="module" src="https://cdn.example.com/assets/index-abc123.js"></script>
+<link rel="stylesheet" href="https://cdn.example.com/assets/index-def456.css" />
+```
+
+Reference: `packages/start-server-core/src/createStartHandler.ts:59-111`
+
+### Dynamic CDN URLs
+
+Use different CDN URLs per request:
+
+```tsx
+import { createStartHandler, defaultStreamHandler } from '@tanstack/react-start/server'
+import { getRequest } from '@tanstack/react-start/server'
+
+export default createStartHandler({
+  handler: defaultStreamHandler,
+  transformAssetUrls: {
+    transform: ({ url, type }) => {
+      // Get region from request
+      const request = getRequest()
+      const region = request.headers.get('x-region') || 'us'
+      
+      // Use region-specific CDN
+      return `https://cdn-${region}.example.com${url}`
+    },
+    cache: false, // Transform per-request
+  },
+})
+```
+
+Reference: `packages/start-server-core/src/createStartHandler.ts:83-95`
+
+### Cache Headers
+
+Set aggressive caching for static assets:
+
+```nginx
+# Nginx configuration
+location /assets/ {
+  expires 1y;
+  add_header Cache-Control "public, immutable";
+  # Enable Brotli compression
+  brotli on;
+  brotli_types text/css application/javascript application/json;
+}
+```
+
+```typescript
+// Or in server code
+import { getResponse } from '@tanstack/react-start/server'
+
+const loader = async () => {
+  const response = getResponse()
+  response.headers.set(
+    'Cache-Control',
+    'public, max-age=31536000, immutable'
+  )
+  return { data }
+}
+```
+
+## Performance Optimization
+
+### 1. Enable Compression
+
+```typescript
+// nitro.config.ts
+export default defineNitroConfig({
+  compressPublicAssets: true,
+})
+```
+
+### 2. Database Connection Pooling
+
+```typescript
+// lib/db.ts
+import { Pool } from 'pg'
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 20, // Maximum connections
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+})
+
+export const db = {
+  query: (text: string, params?: any[]) => pool.query(text, params),
+}
+```
+
+### 3. Response Caching
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+import { getResponse } from '@tanstack/react-start/server'
+
+const getPublicData = createServerFn({ method: 'GET' })
+  .handler(async () => {
+    const response = getResponse()
+    
+    // Cache for 1 hour, revalidate in background
+    response.headers.set(
+      'Cache-Control',
+      'public, max-age=3600, stale-while-revalidate=86400'
+    )
+    
+    const data = await db.query('SELECT * FROM public_data')
+    return data
+  })
+```
+
+### 4. Code Splitting
+
+Lazy load routes and components:
+
+```tsx
+import { lazy } from 'react'
+import { createFileRoute } from '@tanstack/react-router'
+
+// Heavy component - lazy loaded
+const HeavyChart = lazy(() => import('./HeavyChart'))
+
+export const Route = createFileRoute('/analytics')({
+  component: () => (
+    <Suspense fallback={<div>Loading chart...</div>}>
+      <HeavyChart />
+    </Suspense>
+  ),
+})
+```
+
+### 5. Bundle Analysis
+
+```bash
+# Analyze bundle size
+pnpm add -D rollup-plugin-visualizer
+```
+
+```typescript
+// vite.config.ts
+import { visualizer } from 'rollup-plugin-visualizer'
+
+export default defineConfig({
+  plugins: [
+    // ... other plugins
+    visualizer({
+      open: true,
+      gzipSize: true,
+      brotliSize: true,
+    }),
+  ],
+})
+```
+
+## Monitoring and Logging
+
+### Error Tracking
+
+```typescript
+// src/lib/error-tracking.ts
+import * as Sentry from '@sentry/node'
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  environment: process.env.NODE_ENV,
+  tracesSampleRate: 1.0,
+})
+
+export { Sentry }
+```
+
+```tsx
+// Use in server functions
+import { createServerFn } from '@tanstack/react-start'
+import { Sentry } from './lib/error-tracking'
+
+const riskyOperation = createServerFn({ method: 'POST' })
+  .handler(async ({ data }) => {
+    try {
+      return await performOperation(data)
+    } catch (error) {
+      Sentry.captureException(error)
+      throw error
+    }
+  })
+```
+
+### Performance Monitoring
+
+```typescript
+// Middleware for request timing
+import { createMiddleware } from '@tanstack/react-start'
+
+export const timingMiddleware = createMiddleware()
+  .server(async ({ request, next }) => {
+    const start = Date.now()
+    const result = await next()
+    const duration = Date.now() - start
+    
+    console.log(`${request.method} ${request.url} - ${duration}ms`)
+    
+    // Send to analytics service
+    if (process.env.NODE_ENV === 'production') {
+      analytics.track('request', {
+        path: new URL(request.url).pathname,
+        method: request.method,
+        duration,
+      })
+    }
+    
+    return result
+  })
+```
+
+## Security
+
+### 1. Security Headers
+
+```typescript
+// Middleware for security headers
+import { createMiddleware } from '@tanstack/react-start'
+
+export const securityMiddleware = createMiddleware()
+  .server(async ({ next }) => {
+    const result = await next()
+    
+    // Add security headers
+    const response = getResponse()
+    response.headers.set('X-Content-Type-Options', 'nosniff')
+    response.headers.set('X-Frame-Options', 'DENY')
+    response.headers.set('X-XSS-Protection', '1; mode=block')
+    response.headers.set(
+      'Strict-Transport-Security',
+      'max-age=31536000; includeSubDomains'
+    )
+    response.headers.set(
+      'Content-Security-Policy',
+      "default-src 'self'; script-src 'self' 'unsafe-inline'"
+    )
+    
+    return result
+  })
+```
+
+### 2. Rate Limiting
+
+```typescript
+import { createMiddleware } from '@tanstack/react-start'
+import rateLimit from 'express-rate-limit'
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per window
+})
+
+export const rateLimitMiddleware = createMiddleware()
+  .server(async ({ request, next }) => {
+    const ip = request.headers.get('x-forwarded-for') || 'unknown'
+    
+    // Check rate limit
+    const allowed = await checkRateLimit(ip)
+    if (!allowed) {
+      throw new Error('Too many requests')
+    }
+    
+    return next()
+  })
+```
+
+### 3. CORS Configuration
+
+```typescript
+import { createMiddleware } from '@tanstack/react-start'
+
+export const corsMiddleware = createMiddleware()
+  .server(async ({ request, next }) => {
+    const result = await next()
+    const response = getResponse()
+    
+    const origin = request.headers.get('origin')
+    const allowedOrigins = [
+      'https://example.com',
+      'https://www.example.com',
+    ]
+    
+    if (origin && allowedOrigins.includes(origin)) {
+      response.headers.set('Access-Control-Allow-Origin', origin)
+      response.headers.set('Access-Control-Allow-Credentials', 'true')
+      response.headers.set(
+        'Access-Control-Allow-Methods',
+        'GET, POST, PUT, DELETE'
+      )
+    }
+    
+    return result
+  })
+```
+
+## Health Checks
+
+```tsx
+// src/routes/api/health.ts
+import { createAPIFileRoute } from '@tanstack/react-start'
+
+export const Route = createAPIFileRoute('/api/health')({
+  GET: async () => {
+    // Check database
+    const dbHealthy = await checkDatabase()
+    
+    // Check external services
+    const servicesHealthy = await checkExternalServices()
+    
+    const healthy = dbHealthy && servicesHealthy
+    
+    return new Response(
+      JSON.stringify({
+        status: healthy ? 'ok' : 'error',
+        timestamp: new Date().toISOString(),
+        checks: {
+          database: dbHealthy,
+          services: servicesHealthy,
+        },
+      }),
+      {
+        status: healthy ? 200 : 503,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
+  },
+})
+
+async function checkDatabase(): Promise<boolean> {
+  try {
+    await db.query('SELECT 1')
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function checkExternalServices(): Promise<boolean> {
+  try {
+    const response = await fetch('https://api.example.com/health')
+    return response.ok
+  } catch {
+    return false
+  }
+}
+```
+
+## Rollback Strategy
+
+Implement safe deployments:
+
+```bash
+# Deploy with git tags
+git tag -a v1.0.0 -m "Release v1.0.0"
+git push origin v1.0.0
+
+# If issues arise, rollback
+git revert HEAD
+git push origin main
+
+# Or use platform-specific rollback
+vercel rollback
+```
+
+## Next Steps
+
+- Explore [Full-Stack Architecture](./full-stack) to understand how it all fits together
+- Learn about [Server Functions](./server-functions) for client-server communication
+- Review [SSR](./ssr) for server-side rendering concepts
+- Understand [Streaming](./streaming) for progressive data loading

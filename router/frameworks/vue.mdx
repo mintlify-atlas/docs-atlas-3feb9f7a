@@ -1,0 +1,719 @@
+---
+title: Vue Router
+description: Use TanStack Router with Vue for type-safe, reactive routing with built-in caching and URL state management.
+---
+
+# TanStack Vue Router
+
+TanStack Router provides first-class support for Vue 3 with a reactive, type-safe routing solution. It integrates seamlessly with Vue's composition API and provides built-in caching, preloading, and URL state management.
+
+## Installation
+
+Install the Vue Router package:
+
+```bash
+npm install @tanstack/vue-router
+# or
+pnpm add @tanstack/vue-router
+# or
+yarn add @tanstack/vue-router
+```
+
+## Quick Start
+
+Here's a minimal example to get started with TanStack Router in a Vue application:
+
+```tsx
+import { createApp } from 'vue'
+import {
+  RouterProvider,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Link,
+  Outlet,
+} from '@tanstack/vue-router'
+
+// Create the root route
+const rootRoute = createRootRoute({
+  component: () => (
+    <>
+      <div class="p-2 flex gap-2">
+        <Link to="/" class="[&.active]:font-bold">
+          Home
+        </Link>
+        <Link to="/about" class="[&.active]:font-bold">
+          About
+        </Link>
+      </div>
+      <hr />
+      <Outlet />
+    </>
+  ),
+})
+
+// Create child routes
+const indexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  component: () => <div>Welcome Home!</div>,
+})
+
+const aboutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/about',
+  component: () => <div>About Page</div>,
+})
+
+// Create the route tree
+const routeTree = rootRoute.addChildren([indexRoute, aboutRoute])
+
+// Create the router
+const router = createRouter({
+  routeTree,
+  defaultPreload: 'intent',
+})
+
+// Register for type safety
+declare module '@tanstack/vue-router' {
+  interface Register {
+    router: typeof router
+  }
+}
+
+// Create and mount the app
+createApp({
+  setup() {
+    return () => <RouterProvider router={router} />
+  },
+}).mount('#app')
+```
+
+**Source:** `packages/vue-router/src/router.ts:75-77`
+
+## Core Concepts
+
+### Reactive Data with Refs
+
+Vue Router integrates with Vue's reactivity system. Data returned from hooks are wrapped in refs for automatic reactivity:
+
+```tsx
+import { useParams, useSearch, useLoaderData } from '@tanstack/vue-router'
+
+function PostComponent() {
+  const params = useParams()
+  const search = useSearch()
+  const data = postRoute.useLoaderData()
+  
+  // Access values via .value (ref accessors)
+  return (
+    <div>
+      <h1>{data.value.title}</h1>
+      <p>Post ID: {params.value.postId}</p>
+      <p>Filter: {search.value.filter}</p>
+    </div>
+  )
+}
+```
+
+### Router Components
+
+Vue Router provides reactive components that work with Vue's JSX and SFC:
+
+#### `<RouterProvider>`
+
+The top-level component that provides the router to your application:
+
+```tsx
+import { RouterProvider } from '@tanstack/vue-router'
+
+createApp({
+  setup() {
+    return () => <RouterProvider router={router} />
+  },
+}).mount('#app')
+```
+
+**Source:** `packages/vue-router/src/RouterProvider.tsx:1-98`
+
+#### `<Link>`
+
+Creates type-safe navigation links with automatic active states:
+
+```tsx
+import { Link } from '@tanstack/vue-router'
+
+<Link
+  to="/posts/$postId"
+  params={{ postId: '123' }}
+  search={{ filter: 'active' }}
+  activeProps={{ class: 'font-bold' }}
+  preload="intent"
+>
+  View Post
+</Link>
+```
+
+**Source:** `packages/vue-router/src/link.tsx:709-792`
+
+#### `<Outlet>`
+
+Renders child route components:
+
+```tsx
+import { Outlet } from '@tanstack/vue-router'
+
+function LayoutComponent() {
+  return (
+    <div>
+      <header>My App</header>
+      <main>
+        <Outlet />
+      </main>
+    </div>
+  )
+}
+```
+
+**Source:** `packages/vue-router/src/Match.tsx`
+
+### Router Hooks
+
+All hooks return Vue refs for automatic reactivity:
+
+#### `useRouter`
+
+Access the router instance:
+
+```tsx
+import { useRouter } from '@tanstack/vue-router'
+
+function MyComponent() {
+  const router = useRouter()
+  
+  const handleNavigate = () => {
+    router.navigate({ to: '/posts' })
+  }
+  
+  return <button onClick={handleNavigate}>Go to Posts</button>
+}
+```
+
+**Source:** `packages/vue-router/src/useRouter.tsx:6-15`
+
+#### `useNavigate`
+
+Get a type-safe navigate function:
+
+```tsx
+import { useNavigate } from '@tanstack/vue-router'
+
+function MyComponent() {
+  const navigate = useNavigate()
+  
+  const goToPost = () => {
+    navigate({
+      to: '/posts/$postId',
+      params: { postId: '123' },
+      search: { tab: 'comments' },
+    })
+  }
+  
+  return <button onClick={goToPost}>View Post</button>
+}
+```
+
+#### `useParams`
+
+Access route parameters:
+
+```tsx
+import { useParams } from '@tanstack/vue-router'
+
+function PostPage() {
+  const params = useParams()
+  
+  return <h1>Post ID: {params.value.postId}</h1>
+}
+```
+
+#### `useSearch`
+
+Access search parameters:
+
+```tsx
+import { useSearch } from '@tanstack/vue-router'
+
+function PostList() {
+  const search = useSearch()
+  
+  return <div>Filter: {search.value.filter}</div>
+}
+```
+
+#### `useLoaderData`
+
+Access loader data for the current route:
+
+```tsx
+const postRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts/$postId',
+  loader: async ({ params }) => {
+    return fetchPost(params.postId)
+  },
+  component: PostComponent,
+})
+
+function PostComponent() {
+  const post = postRoute.useLoaderData()
+  
+  return (
+    <div>
+      <h1>{post.value.title}</h1>
+      <p>{post.value.body}</p>
+    </div>
+  )
+}
+```
+
+#### `useRouterState`
+
+Access reactive router state:
+
+```tsx
+import { useRouterState } from '@tanstack/vue-router'
+
+function StatusBar() {
+  const isLoading = useRouterState({
+    select: (state) => state.status === 'pending',
+  })
+  
+  return <div v-if={isLoading.value}>Loading...</div>
+}
+```
+
+## Data Loading
+
+### Route Loaders
+
+Define data loading at the route level:
+
+```tsx
+import { createRoute } from '@tanstack/vue-router'
+
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts',
+  loader: async () => {
+    const response = await fetch('/api/posts')
+    return response.json()
+  },
+  component: PostsList,
+})
+
+function PostsList() {
+  const posts = postsRoute.useLoaderData()
+  
+  return (
+    <div>
+      {posts.value.map((post) => (
+        <div key={post.id}>{post.title}</div>
+      ))}
+    </div>
+  )
+}
+```
+
+**Source:** `packages/vue-router/src/route.ts`
+
+### Loader Context
+
+Loaders receive context with params, search, and more:
+
+```tsx
+const postRoute = createRoute({
+  getParentRoute: () => postsRoute,
+  path: '$postId',
+  loader: async ({ params, context, abortController }) => {
+    const response = await fetch(`/api/posts/${params.postId}`, {
+      signal: abortController.signal,
+    })
+    return response.json()
+  },
+})
+```
+
+### Error Handling
+
+Handle errors with error components:
+
+```tsx
+import { ErrorComponent } from '@tanstack/vue-router'
+import type { ErrorComponentProps } from '@tanstack/vue-router'
+
+const postRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts/$postId',
+  loader: async ({ params }) => {
+    const response = await fetch(`/api/posts/${params.postId}`)
+    if (!response.ok) throw new Error('Post not found')
+    return response.json()
+  },
+  errorComponent: PostErrorComponent,
+})
+
+function PostErrorComponent({ error }: ErrorComponentProps) {
+  if (error instanceof NotFoundError) {
+    return <div>Post not found: {error.message}</div>
+  }
+  
+  return <ErrorComponent error={error} />
+}
+```
+
+**Source:** `packages/vue-router/src/CatchBoundary.tsx`
+
+## Navigation
+
+### Programmatic Navigation
+
+```tsx
+import { useNavigate } from '@tanstack/vue-router'
+import { ref } from 'vue'
+
+function SearchForm() {
+  const navigate = useNavigate()
+  const query = ref('')
+  
+  const handleSubmit = (e: Event) => {
+    e.preventDefault()
+    navigate({
+      to: '/search',
+      search: { q: query.value },
+    })
+  }
+  
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        value={query.value}
+        onInput={(e) => query.value = e.currentTarget.value}
+      />
+      <button type="submit">Search</button>
+    </form>
+  )
+}
+```
+
+### Link Preloading
+
+Automatically preload routes on hover, focus, or when visible:
+
+```tsx
+<Link
+  to="/posts/$postId"
+  params={{ postId: '123' }}
+  preload="intent"  // Preload on hover/focus
+>
+  View Post
+</Link>
+
+<Link
+  to="/dashboard"
+  preload="viewport"  // Preload when visible
+>
+  Dashboard
+</Link>
+```
+
+**Source:** `packages/vue-router/src/link.tsx:115-124`
+
+## File-Based Routing
+
+TanStack Router supports file-based routing for Vue with both JSX and Single File Components (SFC).
+
+### Setup
+
+```bash
+pnpm add -D @tanstack/router-plugin
+```
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import vueJsx from '@vitejs/plugin-vue-jsx'
+import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
+
+export default defineConfig({
+  plugins: [
+    TanStackRouterVite(),
+    vueJsx(),
+    vue(),
+  ],
+})
+```
+
+### Route Files with JSX
+
+Create routes using JSX components:
+
+```tsx
+// src/routes/__root.tsx
+import { createRootRoute, Outlet } from '@tanstack/vue-router'
+
+export const Route = createRootRoute({
+  component: () => (
+    <>
+      <nav>My App</nav>
+      <Outlet />
+    </>
+  ),
+})
+```
+
+```tsx
+// src/routes/index.tsx
+import { createFileRoute } from '@tanstack/vue-router'
+
+export const Route = createFileRoute('/')({ 
+  component: () => <div>Home Page</div>,
+})
+```
+
+### Route Files with SFC
+
+Use Vue Single File Components with the file-based routing convention documented in the Vue Router README.
+
+**File-Based Routing Conventions:**
+
+| Pattern | Purpose |
+|---------|----------|
+| `.route.ts` | Route configuration (loader, validateSearch, etc.) |
+| `.component.vue` | The component rendered for the route |
+| `.errorComponent.vue` | Error boundary component |
+| `.notFoundComponent.vue` | Not found component |
+| `.lazy.ts` | Lazy-loaded route configuration |
+| `_layout` prefix | Layout routes that wrap children |
+| `$param` | Dynamic route parameters |
+
+**Example:**
+
+```
+src/routes/
+├── __root.ts
+├── __root.component.vue
+├── index.route.ts
+├── index.component.vue
+├── posts.route.ts
+├── posts.component.vue
+├── posts.$postId.route.ts
+└── posts.$postId.component.vue
+```
+
+```ts
+// src/routes/posts.$postId.route.ts
+import { createFileRoute } from '@tanstack/vue-router'
+
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    return fetchPost(params.postId)
+  },
+})
+```
+
+```vue
+<!-- src/routes/posts.$postId.component.vue -->
+<script setup lang="ts">
+import { useLoaderData } from '@tanstack/vue-router'
+
+const post = useLoaderData({ from: '/posts/$postId' })
+</script>
+
+<template>
+  <div>
+    <h1>{{ post.title }}</h1>
+    <p>{{ post.body }}</p>
+  </div>
+</template>
+```
+
+**Source:** See `packages/vue-router/README.md` for the full file-based routing table
+
+**Source:** `packages/vue-router/src/fileRoute.ts`
+
+## Type Safety
+
+Register your router for full type safety across your application:
+
+```tsx
+declare module '@tanstack/vue-router' {
+  interface Register {
+    router: typeof router
+  }
+}
+```
+
+This enables:
+- Autocomplete for route paths
+- Type-safe params and search parameters
+- Type-safe loader data
+- Type-safe navigation
+
+## SSR Support
+
+TanStack Vue Router supports server-side rendering:
+
+```tsx
+// server.ts
+import { renderToString } from '@vue/server-renderer'
+import { createMemoryHistory } from '@tanstack/vue-router'
+
+export async function render(url: string) {
+  const router = createRouter({
+    routeTree,
+    history: createMemoryHistory({ initialEntries: [url] }),
+  })
+  
+  await router.load()
+  
+  const app = createApp({
+    setup() {
+      return () => <RouterProvider router={router} />
+    },
+  })
+  
+  return renderToString(app)
+}
+```
+
+For full SSR support, consider using [TanStack Start](/start/introduction), the full-stack framework built on TanStack Router.
+
+## DevTools
+
+Add the TanStack Router DevTools to inspect routing state during development:
+
+```tsx
+import { TanStackRouterDevtools } from '@tanstack/vue-router-devtools'
+
+const rootRoute = createRootRoute({
+  component: () => (
+    <>
+      <Outlet />
+      <TanStackRouterDevtools router={router} position="bottom-right" />
+    </>
+  ),
+})
+```
+
+## Advanced Features
+
+### Search Parameter Validation
+
+Validate and parse search parameters with schemas:
+
+```tsx
+import { z } from 'zod'
+import { createRoute } from '@tanstack/vue-router'
+
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts',
+  validateSearch: z.object({
+    page: z.number().default(1),
+    filter: z.enum(['all', 'published', 'draft']).default('all'),
+  }),
+  component: PostsList,
+})
+
+function PostsList() {
+  const search = useSearch({ from: postsRoute.id })
+  
+  return (
+    <div>
+      <p>Page: {search.value.page}</p>
+      <p>Filter: {search.value.filter}</p>
+    </div>
+  )
+}
+```
+
+### Route Context
+
+Share data between parent and child routes:
+
+```tsx
+const rootRoute = createRootRouteWithContext<{
+  userId: string
+}>()({
+  component: RootComponent,
+})
+
+const router = createRouter({
+  routeTree,
+  context: {
+    userId: '123',
+  },
+})
+
+const dashboardRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/dashboard',
+  loader: ({ context }) => {
+    // Access context.userId
+    return fetchUserDashboard(context.userId)
+  },
+})
+```
+
+### Lazy Loading
+
+Lazy load route components for code splitting:
+
+```tsx
+import { defineAsyncComponent } from 'vue'
+
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts',
+  component: defineAsyncComponent(() => import('./PostsList.vue')),
+})
+```
+
+## Migration from Vue Router
+
+If you're migrating from Vue Router, here are the key differences:
+
+| Vue Router | TanStack Router |
+|------------|----------------|
+| `createRouter()` | `createRouter()` with route tree |
+| `<router-view>` | `<Outlet>` |
+| `<router-link>` | `<Link>` |
+| `useRoute()` | `useParams()`, `useSearch()` |
+| `useRouter()` | `useRouter()` |
+| Route guards | `beforeLoad`, loaders |
+| Nested routes in config | `getParentRoute()` |
+
+## API Reference
+
+For detailed API documentation, see:
+
+- [Router API](/router/react/router) - Core router APIs apply to Vue
+- [Route API](/router/react/route) - Route creation and configuration
+- [Link API](/router/react/link) - Navigation components
+- [Hooks API](/router/react/hooks) - Available hooks
+
+## Examples
+
+Explore example applications in the repository:
+
+- [Basic Vue Router (JSX)](https://github.com/TanStack/router/tree/main/examples/vue/basic)
+- [File-Based Routing (JSX)](https://github.com/TanStack/router/tree/main/examples/vue/basic-file-based-jsx)
+- [File-Based Routing (SFC)](https://github.com/TanStack/router/tree/main/examples/vue/basic-file-based-sfc)
+
+## Resources
+
+- [GitHub Repository](https://github.com/TanStack/router)
+- [Discord Community](https://discord.com/invite/WrRKjPJ)
+- [Vue 3 Documentation](https://vuejs.org)

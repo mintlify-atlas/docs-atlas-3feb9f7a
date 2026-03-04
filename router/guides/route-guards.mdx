@@ -1,0 +1,469 @@
+---
+title: Route Guards
+---
+
+# Route Guards
+
+Route guards allow you to protect routes by running logic before navigation occurs. Common use cases include authentication, authorization, data validation, and redirects.
+
+## Overview
+
+TanStack Router provides the `beforeLoad` hook that runs before a route is loaded. Use it to:
+- Check authentication status
+- Verify user permissions
+- Validate required context
+- Redirect users to appropriate pages
+- Perform side effects before rendering
+
+## Authentication Guards
+
+Protect routes that require authentication:
+
+### File-Based Routing
+
+```tsx src/routes/_auth.tsx
+import { createFileRoute, redirect } from '@tanstack/react-router'
+import { Outlet } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/_auth')({
+  beforeLoad: async ({ context, location }) => {
+    // Check if user is authenticated
+    if (!context.auth.isAuthenticated) {
+      // Redirect to login with return URL
+      throw redirect({
+        to: '/login',
+        search: {
+          redirect: location.href,
+        },
+      })
+    }
+  },
+  component: AuthLayout,
+})
+
+function AuthLayout() {
+  return (
+    <div>
+      <h1>Authenticated Area</h1>
+      <Outlet />
+    </div>
+  )
+}
+```
+
+All child routes inherit the guard:
+
+```tsx src/routes/_auth/dashboard.tsx
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/_auth/dashboard')({
+  component: () => <div>Dashboard - Auth required!</div>,
+})
+```
+
+### Code-Based Routing
+
+```tsx
+import { createRoute, redirect } from '@tanstack/react-router'
+
+const authLayoutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: '_auth',
+  beforeLoad: ({ context, location }) => {
+    if (!context.auth.isAuthenticated) {
+      throw redirect({
+        to: '/login',
+        search: { redirect: location.href },
+      })
+    }
+  },
+  component: AuthLayout,
+})
+
+const dashboardRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: '/dashboard',
+  component: Dashboard,
+})
+```
+
+## Setting Up Auth Context
+
+Provide authentication state to all routes via router context:
+
+```tsx src/main.tsx
+import { createRouter, RouterProvider } from '@tanstack/react-router'
+import { useAuth } from './auth'
+
+function App() {
+  const auth = useAuth()
+  
+  const router = createRouter({
+    routeTree,
+    context: {
+      auth,
+    },
+  })
+  
+  return <RouterProvider router={router} />
+}
+```
+
+```tsx src/auth.tsx
+import { useState, useEffect } from 'react'
+
+export interface AuthContext {
+  isAuthenticated: boolean
+  user: User | null
+  login: (email: string, password: string) => Promise<void>
+  logout: () => Promise<void>
+}
+
+export function useAuth(): AuthContext {
+  const [user, setUser] = useState<User | null>(null)
+  
+  useEffect(() => {
+    // Check session on mount
+    checkSession().then(setUser)
+  }, [])
+  
+  return {
+    isAuthenticated: !!user,
+    user,
+    login: async (email, password) => {
+      const user = await loginUser(email, password)
+      setUser(user)
+    },
+    logout: async () => {
+      await logoutUser()
+      setUser(null)
+    },
+  }
+}
+```
+
+Type the router context:
+
+```tsx
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router
+  }
+  
+  interface RouterContext {
+    auth: AuthContext
+  }
+}
+```
+
+## Authorization Guards
+
+Check user permissions and roles:
+
+```tsx src/routes/_auth/admin.tsx
+import { createFileRoute, redirect } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/_auth/admin')({
+  beforeLoad: ({ context }) => {
+    const { auth } = context
+    
+    // Check authentication
+    if (!auth.isAuthenticated) {
+      throw redirect({ to: '/login' })
+    }
+    
+    // Check authorization
+    if (!auth.user?.roles.includes('admin')) {
+      throw redirect({
+        to: '/',
+        // Optionally show error message
+        search: { error: 'Insufficient permissions' },
+      })
+    }
+  },
+  component: AdminPanel,
+})
+```
+
+## Multiple Guard Conditions
+
+Combine multiple checks:
+
+```tsx
+export const Route = createFileRoute('/_auth/workspace/$workspaceId')({
+  beforeLoad: async ({ context, params }) => {
+    const { auth } = context
+    
+    // 1. Check authentication
+    if (!auth.isAuthenticated) {
+      throw redirect({ to: '/login' })
+    }
+    
+    // 2. Verify workspace access
+    const hasAccess = await checkWorkspaceAccess(
+      auth.user.id,
+      params.workspaceId,
+    )
+    
+    if (!hasAccess) {
+      throw redirect({
+        to: '/workspaces',
+        search: { error: 'Workspace not found or access denied' },
+      })
+    }
+    
+    // 3. Load workspace data
+    const workspace = await fetchWorkspace(params.workspaceId)
+    
+    // Return data to pass to route context
+    return { workspace }
+  },
+  component: WorkspaceView,
+})
+```
+
+## Login Route with Redirect
+
+Capture and redirect after successful login:
+
+```tsx src/routes/login.tsx
+import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
+import { useAuth } from '../auth'
+
+export const Route = createFileRoute('/login')({
+  validateSearch: (search: Record<string, unknown>) => {
+    return {
+      redirect: (search.redirect as string) || '/',
+    }
+  },
+  beforeLoad: ({ context, search }) => {
+    // If already logged in, redirect
+    if (context.auth.isAuthenticated) {
+      throw redirect({ to: search.redirect })
+    }
+  },
+  component: LoginPage,
+})
+
+function LoginPage() {
+  const auth = useAuth()
+  const navigate = useNavigate()
+  const { redirect } = Route.useSearch()
+  
+  const handleLogin = async (email: string, password: string) => {
+    await auth.login(email, password)
+    // Redirect to original destination
+    navigate({ to: redirect })
+  }
+  
+  return (
+    <form onSubmit={(e) => {
+      e.preventDefault()
+      const formData = new FormData(e.currentTarget)
+      handleLogin(
+        formData.get('email') as string,
+        formData.get('password') as string,
+      )
+    }}>
+      <input name="email" type="email" required />
+      <input name="password" type="password" required />
+      <button type="submit">Login</button>
+    </form>
+  )
+}
+```
+
+## Preloading with Guards
+
+Guards also run during preloading:
+
+```tsx
+import { Link } from '@tanstack/react-router'
+
+// This will trigger beforeLoad when hovering
+<Link to="/dashboard" preload="intent">
+  Dashboard
+</Link>
+```
+
+<Note>
+  Guards run during preload, but redirects are only executed during actual navigation.
+</Note>
+
+## Conditional Rendering vs Guards
+
+Use guards for navigation control, not just UI:
+
+```tsx
+// ❌ Wrong: User can still access via direct URL
+function Dashboard() {
+  const { auth } = useRouteContext()
+  
+  if (!auth.isAuthenticated) {
+    return <div>Please log in</div>
+  }
+  
+  return <div>Dashboard</div>
+}
+
+// ✅ Correct: Navigation is blocked
+export const Route = createFileRoute('/dashboard')({
+  beforeLoad: ({ context }) => {
+    if (!context.auth.isAuthenticated) {
+      throw redirect({ to: '/login' })
+    }
+  },
+  component: Dashboard,
+})
+```
+
+## Async Guards
+
+Perform async operations in guards:
+
+```tsx
+export const Route = createFileRoute('/_auth/organization/$orgId')({
+  beforeLoad: async ({ context, params }) => {
+    // Async permission check
+    const hasPermission = await checkOrgPermission(
+      context.auth.user.id,
+      params.orgId,
+    )
+    
+    if (!hasPermission) {
+      throw redirect({ to: '/organizations' })
+    }
+    
+    // Optionally load and return data
+    const organization = await fetchOrganization(params.orgId)
+    return { organization }
+  },
+})
+```
+
+## Error Handling in Guards
+
+Handle errors gracefully:
+
+```tsx
+export const Route = createFileRoute('/protected')({
+  beforeLoad: async ({ context }) => {
+    try {
+      // Verify session with backend
+      await verifySession(context.auth.sessionToken)
+    } catch (error) {
+      // Session expired or invalid
+      context.auth.logout()
+      throw redirect({
+        to: '/login',
+        search: { error: 'Session expired' },
+      })
+    }
+  },
+})
+```
+
+## Composing Guards
+
+Reuse guard logic:
+
+```tsx utils/guards.ts
+import { redirect } from '@tanstack/react-router'
+
+export function requireAuth({ context, location }: any) {
+  if (!context.auth.isAuthenticated) {
+    throw redirect({
+      to: '/login',
+      search: { redirect: location.href },
+    })
+  }
+}
+
+export function requireRole(role: string) {
+  return ({ context }: any) => {
+    requireAuth({ context })
+    
+    if (!context.auth.user?.roles.includes(role)) {
+      throw redirect({ to: '/' })
+    }
+  }
+}
+```
+
+Use in routes:
+
+```tsx
+import { requireAuth, requireRole } from '../utils/guards'
+
+export const Route = createFileRoute('/_auth/admin')({
+  beforeLoad: requireRole('admin'),
+  component: AdminPanel,
+})
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Redirects" icon="arrow-right">
+    Always throw redirect() instead of returning JSX from guards
+  </Card>
+  
+  <Card title="Validate Async" icon="clock">
+    Perform server-side validation, don't trust client state alone
+  </Card>
+  
+  <Card title="Context Over Props" icon="database">
+    Use router context for auth state, not prop drilling
+  </Card>
+  
+  <Card title="Guard Hierarchies" icon="layer-group">
+    Place guards on layout routes to protect all children
+  </Card>
+</CardGroup>
+
+<Warning>
+  **Security**: Route guards are client-side only. Always validate permissions on your backend API as well.
+</Warning>
+
+## Complete Example
+
+Here's a full authentication setup:
+
+```tsx src/routes/__root.tsx
+import { createRootRoute } from '@tanstack/react-router'
+import { AuthProvider } from '../auth'
+
+export const Route = createRootRoute({
+  component: () => (
+    <AuthProvider>
+      <Outlet />
+    </AuthProvider>
+  ),
+})
+```
+
+```tsx src/routes/_auth.tsx
+export const Route = createFileRoute('/_auth')({
+  beforeLoad: ({ context, location }) => {
+    if (!context.auth.isAuthenticated) {
+      throw redirect({
+        to: '/login',
+        search: { redirect: location.href },
+      })
+    }
+  },
+  component: AuthLayout,
+})
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Error Boundaries" href="./error-boundaries">
+    Handle errors in protected routes
+  </Card>
+  
+  <Card title="SSR" href="./ssr">
+    Server-side rendering with authentication
+  </Card>
+</CardGroup>

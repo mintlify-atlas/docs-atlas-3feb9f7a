@@ -1,0 +1,354 @@
+---
+title: File-Based Routing
+---
+
+# File-Based Routing
+
+TanStack Router supports file-based routing, which automatically generates your route tree from your file system structure. This approach provides excellent developer experience with type safety and automatic route generation.
+
+## Overview
+
+File-based routing eliminates the need to manually define routes by deriving them from your file structure. The router automatically generates type-safe routes based on your file naming conventions.
+
+## Setup
+
+<Steps>
+  <Step title="Install the Router Plugin">
+    Install the TanStack Router plugin for your bundler:
+
+    <CodeGroup>
+    ```bash npm
+    npm install -D @tanstack/router-plugin
+    ```
+
+    ```bash pnpm
+    pnpm add -D @tanstack/router-plugin
+    ```
+
+    ```bash yarn
+    yarn add -D @tanstack/router-plugin
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Configure Your Bundler">
+    Add the plugin to your bundler configuration:
+
+    <CodeGroup>
+    ```ts vite.config.ts
+    import { defineConfig } from 'vite'
+    import react from '@vitejs/plugin-react'
+    import { TanStackRouterPlugin } from '@tanstack/router-plugin/vite'
+
+    export default defineConfig({
+      plugins: [
+        TanStackRouterPlugin(),
+        react(),
+      ],
+    })
+    ```
+
+    ```ts webpack.config.js
+    const { TanStackRouterPlugin } = require('@tanstack/router-plugin/webpack')
+
+    module.exports = {
+      plugins: [
+        TanStackRouterPlugin(),
+      ],
+    }
+    ```
+
+    ```ts esbuild.config.js
+    const { TanStackRouterPlugin } = require('@tanstack/router-plugin/esbuild')
+    const esbuild = require('esbuild')
+
+    esbuild.build({
+      plugins: [TanStackRouterPlugin()],
+    })
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Create Your Routes Directory">
+    Create a `src/routes/` directory for your route files:
+
+    ```bash
+    mkdir src/routes
+    ```
+  </Step>
+
+  <Step title="Create the Root Route">
+    Every file-based router needs a root route. Create `src/routes/__root.tsx`:
+
+    ```tsx src/routes/__root.tsx
+    import { Link, Outlet, createRootRoute } from '@tanstack/react-router'
+    import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
+
+    export const Route = createRootRoute({
+      component: RootComponent,
+    })
+
+    function RootComponent() {
+      return (
+        <>
+          <div className="p-2 flex gap-2">
+            <Link to="/" className="[&.active]:font-bold">
+              Home
+            </Link>
+            <Link to="/about" className="[&.active]:font-bold">
+              About
+            </Link>
+          </div>
+          <hr />
+          <Outlet />
+          <TanStackRouterDevtools />
+        </>
+      )
+    }
+    ```
+  </Step>
+
+  <Step title="Create Route Files">
+    Create route files following the naming conventions:
+
+    ```tsx src/routes/index.tsx
+    import { createFileRoute } from '@tanstack/react-router'
+
+    export const Route = createFileRoute('/')({')
+      component: IndexComponent,
+    })
+
+    function IndexComponent() {
+      return <div>Welcome Home!</div>
+    }
+    ```
+  </Step>
+
+  <Step title="Import and Use the Generated Route Tree">
+    The plugin automatically generates a `routeTree.gen.ts` file. Import it in your main file:
+
+    ```tsx src/main.tsx
+    import { RouterProvider, createRouter } from '@tanstack/react-router'
+    import { routeTree } from './routeTree.gen'
+
+    const router = createRouter({ routeTree })
+
+    declare module '@tanstack/react-router' {
+      interface Register {
+        router: typeof router
+      }
+    }
+
+    function App() {
+      return <RouterProvider router={router} />
+    }
+    ```
+  </Step>
+</Steps>
+
+## File Naming Conventions
+
+### Index Routes
+
+Files named `index.tsx` create index routes:
+
+```
+src/routes/index.tsx → /
+src/routes/posts/index.tsx → /posts
+```
+
+### Dynamic Route Segments
+
+Use `$` prefix for dynamic parameters:
+
+```
+src/routes/posts/$postId.tsx → /posts/:postId
+src/routes/users/$userId/profile.tsx → /users/:userId/profile
+```
+
+```tsx src/routes/posts/$postId.tsx
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    return fetchPost(params.postId)
+  },
+  component: PostComponent,
+})
+
+function PostComponent() {
+  const post = Route.useLoaderData()
+  return <div>{post.title}</div>
+}
+```
+
+### Layout Routes
+
+Files ending in `.route.tsx` or without a component create layouts:
+
+```tsx src/routes/posts.route.tsx
+import { createFileRoute, Outlet } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/posts')({
+  component: PostsLayout,
+})
+
+function PostsLayout() {
+  return (
+    <div>
+      <h1>Posts</h1>
+      <Outlet />
+    </div>
+  )
+}
+```
+
+### Pathless Layouts
+
+Use `_` prefix for routes that don't add a path segment:
+
+```
+src/routes/_layout.tsx → (no path)
+src/routes/_layout/dashboard.tsx → /dashboard
+src/routes/_layout/settings.tsx → /settings
+```
+
+```tsx src/routes/_layout.tsx
+import { createFileRoute, Outlet } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/_layout')({
+  component: LayoutComponent,
+})
+
+function LayoutComponent() {
+  return (
+    <div className="layout">
+      <Outlet />
+    </div>
+  )
+}
+```
+
+### Splat/Catch-All Routes
+
+Use `$.tsx` for catch-all routes:
+
+```
+src/routes/files/$.tsx → /files/*
+```
+
+## Route Configuration
+
+File-based routes support all the same options as code-based routes:
+
+```tsx src/routes/posts/$postId.tsx
+import { createFileRoute } from '@tanstack/react-router'
+import { ErrorComponent } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/posts/$postId')({
+  // Data loading
+  loader: async ({ params }) => fetchPost(params.postId),
+  
+  // Before navigation guard
+  beforeLoad: ({ context }) => {
+    if (!context.user) {
+      throw redirect({ to: '/login' })
+    }
+  },
+  
+  // Error handling
+  errorComponent: ({ error }) => <ErrorComponent error={error} />,
+  
+  // Not found handling
+  notFoundComponent: () => <div>Post not found</div>,
+  
+  // Pending component while loading
+  pendingComponent: () => <div>Loading post...</div>,
+  
+  // Component to render
+  component: PostComponent,
+})
+
+function PostComponent() {
+  const post = Route.useLoaderData()
+  return <div>{post.title}</div>
+}
+```
+
+## Plugin Configuration
+
+Customize the plugin behavior:
+
+```ts vite.config.ts
+import { TanStackRouterPlugin } from '@tanstack/router-plugin/vite'
+
+export default {
+  plugins: [
+    TanStackRouterPlugin({
+      // Routes directory (default: './src/routes')
+      routesDirectory: './src/routes',
+      
+      // Generated route tree file (default: './src/routeTree.gen.ts')
+      generatedRouteTree: './src/routeTree.gen.ts',
+      
+      // Auto-generate route tree on file changes (default: true)
+      autoCodeSplitting: true,
+    }),
+  ],
+}
+```
+
+## Benefits of File-Based Routing
+
+<CardGroup cols={2}>
+  <Card title="Type Safety" icon="shield-check">
+    Automatic type generation for all routes, params, and search params
+  </Card>
+  
+  <Card title="Developer Experience" icon="code">
+    No manual route configuration - just create files and they work
+  </Card>
+  
+  <Card title="Code Splitting" icon="scissors">
+    Automatic code splitting based on your file structure
+  </Card>
+  
+  <Card title="Conventions" icon="book">
+    Clear, standard conventions for organizing your routes
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<Note>
+  **Co-locate related files**: Keep components, hooks, and utilities close to the routes that use them.
+</Note>
+
+<Warning>
+  **Avoid conflicts**: Don't create routes with overlapping paths. File-based routing will detect and warn about conflicts.
+</Warning>
+
+```
+src/routes/
+  __root.tsx
+  index.tsx
+  posts/
+    index.tsx
+    $postId.tsx
+    components/
+      PostCard.tsx
+    utils/
+      fetchPost.ts
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Nested Routes" href="./nested-routes">
+    Learn how to create nested route hierarchies
+  </Card>
+  
+  <Card title="Route Guards" href="./route-guards">
+    Protect routes with authentication and authorization
+  </Card>
+</CardGroup>

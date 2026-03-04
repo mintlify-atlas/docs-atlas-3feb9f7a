@@ -1,0 +1,456 @@
+---
+title: Type Safety
+---
+
+# Type Safety
+
+TanStack Router is built with TypeScript from the ground up, providing unparalleled type safety throughout your routing layer. Every navigation, every parameter, and every search param is fully typed.
+
+## Why Type Safety Matters
+
+Type-safe routing eliminates entire categories of bugs:
+
+- **No broken links** - TypeScript errors if you navigate to a non-existent route
+- **No missing parameters** - Required params are enforced at compile time
+- **No malformed search params** - Search parameters are validated and typed
+- **Autocomplete everywhere** - Full IDE support for paths, params, and more
+
+This means you catch routing errors during development, not in production.
+
+## Route Path Types
+
+TanStack Router automatically generates types for all valid route paths.
+
+### Type-Safe Navigation
+
+```tsx
+import { useNavigate } from '@tanstack/react-router'
+
+function MyComponent() {
+  const navigate = useNavigate()
+  
+  // ✅ Valid - route exists
+  navigate({ to: '/posts/$postId', params: { postId: '123' } })
+  
+  // ❌ TypeScript error - route doesn't exist
+  navigate({ to: '/invalid-route' })
+  
+  // ❌ TypeScript error - missing required param
+  navigate({ to: '/posts/$postId' })
+}
+```
+
+The `to` property only accepts valid route paths from your route tree.
+
+### Path Inference
+
+Path types are inferred from your route tree structure:
+
+```tsx
+const rootRoute = createRootRoute()
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts',
+})
+const postRoute = createRoute({
+  getParentRoute: () => postsRoute,
+  path: '$postId',
+})
+
+const routeTree = rootRoute.addChildren([postsRoute.addChildren([postRoute])])
+
+// Generated types:
+// type RoutePaths = '/' | '/posts' | '/posts/$postId'
+```
+
+These types are generated automatically from the route tree structure defined in `packages/router-core/src/routeInfo.ts`.
+
+## Parameter Type Safety
+
+Path parameters are fully typed based on the route path pattern.
+
+### Required Parameters
+
+```tsx
+export const Route = createFileRoute('/posts/$postId')({
+  component: PostComponent,
+})
+
+function PostComponent() {
+  // params.postId is always string (never undefined)
+  const params = Route.useParams()
+  console.log(params.postId) // string
+}
+
+// When navigating
+const navigate = useNavigate()
+
+// ✅ Correct
+navigate({ 
+  to: '/posts/$postId',
+  params: { postId: '123' } 
+})
+
+// ❌ TypeScript error - missing postId
+navigate({ to: '/posts/$postId' })
+```
+
+### Optional Parameters
+
+```tsx
+export const Route = createFileRoute('/posts/{-$postId}')({
+  component: PostComponent,
+})
+
+function PostComponent() {
+  const params = Route.useParams()
+  // params.postId is string | undefined
+  if (params.postId) {
+    // Narrowed to string here
+  }
+}
+```
+
+### Parsed Parameters
+
+Parameter parsing preserves types:
+
+```tsx
+export const Route = createFileRoute('/posts/$postId')({
+  params: {
+    parse: (params) => ({
+      postId: Number(params.postId),
+    }),
+  },
+  component: PostComponent,
+})
+
+function PostComponent() {
+  const { postId } = Route.useParams()
+  // postId is number, not string!
+  const doubled = postId * 2 // ✅ Works
+}
+```
+
+The type system tracks the transformation from `string` to `number`.
+
+## Search Parameter Type Safety
+
+Search parameters are fully typed when using validation schemas.
+
+### Schema-Based Validation
+
+```tsx
+import { z } from 'zod'
+import { createFileRoute } from '@tanstack/react-router'
+
+const searchSchema = z.object({
+  page: z.number().int().min(1).default(1),
+  filter: z.string().optional(),
+  sortBy: z.enum(['date', 'title', 'author']).default('date'),
+})
+
+export const Route = createFileRoute('/posts')({
+  validateSearch: searchSchema,
+  component: PostsComponent,
+})
+
+function PostsComponent() {
+  const search = Route.useSearch()
+  // search.page is number (never undefined due to default)
+  // search.filter is string | undefined
+  // search.sortBy is 'date' | 'title' | 'author'
+}
+```
+
+### Type-Safe Search Updates
+
+```tsx
+import { Link } from '@tanstack/react-router'
+
+function PostsComponent() {
+  return (
+    <div>
+      {/* ✅ Valid - sortBy accepts 'title' */}
+      <Link
+        to="/posts"
+        search={{ sortBy: 'title' }}
+      >
+        Sort by Title
+      </Link>
+      
+      {/* ❌ TypeScript error - invalid value */}
+      <Link
+        to="/posts"
+        search={{ sortBy: 'invalid' }}
+      >
+        Invalid Sort
+      </Link>
+      
+      {/* ❌ TypeScript error - page must be number */}
+      <Link
+        to="/posts"
+        search={{ page: '2' }}
+      >
+        Page 2
+      </Link>
+    </div>
+  )
+}
+```
+
+## Context Type Safety
+
+Route context is fully typed through the route tree.
+
+### Defining Typed Context
+
+```tsx
+import { createRootRouteWithContext } from '@tanstack/react-router'
+
+interface MyRouterContext {
+  auth: AuthService
+  queryClient: QueryClient
+}
+
+const rootRoute = createRootRouteWithContext<MyRouterContext>()({
+  component: RootComponent,
+})
+```
+
+### Accessing Typed Context
+
+```tsx
+export const Route = createFileRoute('/dashboard')({
+  beforeLoad: ({ context }) => {
+    // context.auth is fully typed!
+    const user = context.auth.currentUser
+    const client = context.queryClient
+  },
+  loader: ({ context }) => {
+    // Context available in loader too
+    return context.queryClient.fetchQuery(...)
+  },
+})
+```
+
+### Adding to Context
+
+Child routes inherit and extend parent context:
+
+```tsx
+export const Route = createFileRoute('/_auth')({
+  beforeLoad: async ({ context }) => {
+    const user = await context.auth.getUser()
+    
+    // Return additional context
+    return {
+      user,
+    }
+  },
+})
+
+// Child route
+export const ChildRoute = createFileRoute('/_auth/profile')({
+  loader: ({ context }) => {
+    // context.user is available and typed!
+    return fetchUserProfile(context.user.id)
+  },
+})
+```
+
+The context type system is defined in `packages/router-core/src/route.ts:290-293`:
+
+```typescript
+export type ResolveRouteContext<TRouteContextFn, TBeforeLoadFn> = Assign<
+  ContextReturnType<TRouteContextFn>,
+  ContextAsyncReturnType<TBeforeLoadFn>
+>
+```
+
+## Loader Data Type Safety
+
+Loader return types are automatically inferred:
+
+```tsx
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    const post = await fetchPost(params.postId)
+    const comments = await fetchComments(params.postId)
+    
+    return {
+      post,
+      comments,
+    }
+  },
+  component: PostComponent,
+})
+
+function PostComponent() {
+  const data = Route.useLoaderData()
+  // data.post is fully typed as Post
+  // data.comments is fully typed as Comment[]
+  
+  return (
+    <div>
+      <h1>{data.post.title}</h1>
+      <Comments comments={data.comments} />
+    </div>
+  )
+}
+```
+
+The loader data type is resolved via `ResolveLoaderData` in `packages/router-core/src/route.ts:295-299`:
+
+```typescript
+export type ResolveLoaderData<TLoaderFn> = unknown extends TLoaderFn
+  ? TLoaderFn
+  : LooseAsyncReturnType<TLoaderFn> extends never
+    ? undefined
+    : LooseAsyncReturnType<TLoaderFn>
+```
+
+## Type Registration
+
+Register your router for global type inference:
+
+```tsx
+// src/router.tsx
+import { createRouter } from '@tanstack/react-router'
+import { routeTree } from './routeTree.gen'
+
+const router = createRouter({ routeTree })
+
+// Register router type
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router
+  }
+}
+
+export { router }
+```
+
+Now all router hooks and components have access to your route types:
+
+```tsx
+// Anywhere in your app
+import { useNavigate, Link } from '@tanstack/react-router'
+
+function AnyComponent() {
+  const navigate = useNavigate()
+  // Full autocomplete for all routes!
+  
+  return (
+    <Link to="/posts/$postId" params={{ postId: '1' }}>
+      {/* All typed! */}
+    </Link>
+  )
+}
+```
+
+The `Register` interface is defined in `packages/router-core/src/router.ts:115-120`.
+
+## Relative Navigation Types
+
+Relative navigation maintains type safety:
+
+```tsx
+export const Route = createFileRoute('/posts/$postId')({
+  component: PostComponent,
+})
+
+function PostComponent() {
+  const navigate = useNavigate({ from: '/posts/$postId' })
+  
+  // Relative navigation from current route
+  navigate({ to: '..' }) // Go to /posts
+  navigate({ to: '../other' }) // Go to /posts/other
+  navigate({ to: '.' }) // Stay at /posts/$postId
+}
+```
+
+Relative paths are resolved using type-level string manipulation in `packages/router-core/src/link.ts:161-200`.
+
+## Type-Safe Link Props
+
+The `Link` component enforces all type constraints:
+
+```tsx
+import { Link } from '@tanstack/react-router'
+
+// ✅ All required props provided and typed correctly
+<Link
+  to="/posts/$postId"
+  params={{ postId: '123' }}
+  search={{ page: 1 }}
+>
+  View Post
+</Link>
+
+// ❌ TypeScript error - missing required param
+<Link to="/posts/$postId">
+  View Post
+</Link>
+
+// ❌ TypeScript error - invalid search param type
+<Link
+  to="/posts"
+  search={{ page: '1' }} // Should be number
+>
+  Posts
+</Link>
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always register your router type">
+    Type registration via the `Register` interface gives you global type inference. Do this once in your router setup file.
+  </Accordion>
+
+  <Accordion title="Use validation schemas for search params">
+    Schema validation (Zod, Valibot, etc.) provides both runtime safety and compile-time types in one step.
+  </Accordion>
+
+  <Accordion title="Leverage parse functions for params">
+    Use `params.parse` to transform string params into the types your app needs (numbers, dates, etc.). The type system tracks these transformations.
+  </Accordion>
+
+  <Accordion title="Define router context at the root">
+    Use `createRootRouteWithContext` to type your global context. This flows through to all child routes automatically.
+  </Accordion>
+
+  <Accordion title="Let TypeScript infer loader types">
+    Don't manually type loader return values - let TypeScript infer them from your actual data fetching code for perfect accuracy.
+  </Accordion>
+</AccordionGroup>
+
+## Type Safety Under the Hood
+
+TanStack Router's type safety is powered by advanced TypeScript features:
+
+- **Template literal types** - Parse route patterns like `/posts/$postId`
+- **Conditional types** - Determine required vs optional params
+- **Mapped types** - Build parameter objects from paths
+- **Type inference** - Extract return types from loaders and context functions
+- **Module augmentation** - Register router globally via `interface Register`
+
+The core type system lives in `packages/router-core/src/route.ts` and `packages/router-core/src/routeInfo.ts`.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Routes" icon="route" href="./routes">
+    Learn about route configuration and options
+  </Card>
+  <Card title="Navigation" icon="compass" href="./navigation">
+    Explore type-safe navigation APIs
+  </Card>
+  <Card title="Search Params" icon="magnifying-glass" href="./search-params">
+    Master type-safe search parameter handling
+  </Card>
+  <Card title="Loaders" icon="database" href="./loaders">
+    Understand loader data type inference
+  </Card>
+</CardGroup>

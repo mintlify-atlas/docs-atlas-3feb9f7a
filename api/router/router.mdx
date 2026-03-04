@@ -1,0 +1,270 @@
+---
+title: Router API
+---
+
+# Router
+
+The core Router class manages routing state, navigation, and route matching in TanStack Router.
+
+## RouterOptions
+
+Configuration options for creating a router instance.
+
+<ParamField path="routeTree" type="AnyRoute" required>
+  The root route tree structure that defines all routes in your application.
+</ParamField>
+
+<ParamField path="history" type="RouterHistory">
+  The history object that manages browser history. If not provided, a new `createBrowserHistory` instance will be created.
+  
+  **See:** [History Types Guide](https://tanstack.com/router/latest/docs/framework/react/guide/history-types)
+</ParamField>
+
+<ParamField path="basepath" type="string">
+  The base path for the router. All routes will be relative to this path.
+  
+  **Default:** `'/'`
+</ParamField>
+
+<ParamField path="stringifySearch" type="SearchSerializer">
+  Function to stringify search params when generating links.
+  
+  **Default:** `defaultStringifySearch`
+</ParamField>
+
+<ParamField path="parseSearch" type="SearchParser">
+  Function to parse search params when parsing the current location.
+  
+  **Default:** `defaultParseSearch`
+</ParamField>
+
+<ParamField path="defaultPreload" type="false | 'intent' | 'viewport' | 'render'">
+  Default preloading strategy for routes:
+  - `false` - Routes are not preloaded
+  - `'intent'` - Preload on hover or touchstart
+  - `'viewport'` - Preload when in viewport
+  - `'render'` - Preload when rendered
+  
+  **Default:** `false`
+</ParamField>
+
+<ParamField path="defaultPreloadDelay" type="number">
+  Delay in milliseconds before preloading a route.
+  
+  **Default:** `50`
+</ParamField>
+
+<ParamField path="defaultComponent" type="RouteComponent">
+  Default component to render when a route doesn't have a component defined.
+</ParamField>
+
+<ParamField path="defaultErrorComponent" type="ErrorRouteComponent">
+  Default error component to render when a route throws an error.
+</ParamField>
+
+<ParamField path="defaultPendingComponent" type="RouteComponent">
+  Default pending component to show while a route is loading.
+</ParamField>
+
+<ParamField path="defaultPendingMs" type="number">
+  Minimum time in milliseconds to show pending component.
+  
+  **Default:** `1000`
+</ParamField>
+
+<ParamField path="defaultPendingMinMs" type="number">
+  Minimum time in milliseconds to keep pending component visible once shown.
+  
+  **Default:** `500`
+</ParamField>
+
+<ParamField path="context" type="AnyContext">
+  Global context object available to all routes.
+</ParamField>
+
+<ParamField path="trailingSlash" type="'always' | 'never' | 'preserve'">
+  How to handle trailing slashes in URLs:
+  - `'always'` - Always add trailing slash
+  - `'never'` - Always remove trailing slash
+  - `'preserve'` - Keep trailing slash as-is
+  
+  **Default:** `'never'`
+</ParamField>
+
+<ParamField path="notFoundMode" type="'fuzzy' | 'root'">
+  Where to render the not found component:
+  - `'fuzzy'` - Render at the nearest parent route
+  - `'root'` - Render at the root route
+  
+  **Default:** `'fuzzy'`
+</ParamField>
+
+<ParamField path="caseSensitive" type="boolean">
+  Whether route matching should be case-sensitive.
+  
+  **Default:** `false`
+</ParamField>
+
+## Router Class
+
+### Properties
+
+<ResponseField name="state" type="RouterState">
+  Current router state including location, matches, and status.
+</ResponseField>
+
+<ResponseField name="history" type="RouterHistory">
+  The history object managing navigation.
+</ResponseField>
+
+<ResponseField name="basepath" type="string">
+  The base path for all routes.
+</ResponseField>
+
+<ResponseField name="routeTree" type="AnyRoute">
+  The root route tree structure.
+</ResponseField>
+
+### Methods
+
+<ResponseField name="navigate" type="(options: NavigateOptions) => Promise<void>">
+  Navigate to a new location.
+  
+  ```tsx
+  router.navigate({
+    to: '/posts/$postId',
+    params: { postId: '123' },
+    search: { page: 1 }
+  })
+  ```
+</ResponseField>
+
+<ResponseField name="buildLocation" type="(options: BuildLocationOptions) => ParsedLocation">
+  Build a location object from navigation options without navigating.
+  
+  ```tsx
+  const location = router.buildLocation({
+    to: '/posts',
+    search: { filter: 'recent' }
+  })
+  ```
+</ResponseField>
+
+<ResponseField name="matchRoute" type="(location: ParsedLocation, options?: MatchRouteOptions) => RouteMatch | false">
+  Check if a location matches a route.
+  
+  ```tsx
+  const match = router.matchRoute({ to: '/posts' })
+  if (match) {
+    console.log('Route matches!', match)
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="preloadRoute" type="(options: NavigateOptions) => Promise<RouteMatch[]>">
+  Preload a route and its data.
+  
+  ```tsx
+  await router.preloadRoute({
+    to: '/posts/$postId',
+    params: { postId: '123' }
+  })
+  ```
+</ResponseField>
+
+<ResponseField name="invalidate" type="() => Promise<void>">
+  Invalidate and refetch all active route matches.
+  
+  ```tsx
+  await router.invalidate()
+  ```
+</ResponseField>
+
+<ResponseField name="load" type="() => Promise<void>">
+  Load or reload the current route matches.
+</ResponseField>
+
+<ResponseField name="subscribe" type="(eventName: string, callback: Function) => () => void">
+  Subscribe to router events. Returns an unsubscribe function.
+  
+  ```tsx
+  const unsubscribe = router.subscribe('onLoad', () => {
+    console.log('Route loaded')
+  })
+  ```
+</ResponseField>
+
+## RouterState
+
+The current state of the router.
+
+<ResponseField name="location" type="ParsedLocation">
+  The current location object.
+</ResponseField>
+
+<ResponseField name="matches" type="RouteMatch[]">
+  Array of matched routes for the current location.
+</ResponseField>
+
+<ResponseField name="pendingMatches" type="RouteMatch[]">
+  Array of matches that are currently loading.
+</ResponseField>
+
+<ResponseField name="status" type="'pending' | 'idle'">
+  Current navigation status.
+</ResponseField>
+
+<ResponseField name="isLoading" type="boolean">
+  Whether the router is currently loading a route.
+</ResponseField>
+
+<ResponseField name="isTransitioning" type="boolean">
+  Whether the router is currently transitioning between routes.
+</ResponseField>
+
+## Example Usage
+
+```tsx
+import { createRouter, createRootRoute, createRoute } from '@tanstack/react-router'
+
+// Define routes
+const rootRoute = createRootRoute()
+
+const indexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  component: () => <div>Home</div>
+})
+
+const routeTree = rootRoute.addChildren([indexRoute])
+
+// Create router
+const router = createRouter({
+  routeTree,
+  defaultPreload: 'intent',
+  defaultPendingMs: 1000
+})
+
+// Navigate programmatically
+await router.navigate({
+  to: '/about',
+  search: { tab: 'overview' }
+})
+
+// Subscribe to events
+const unsubscribe = router.subscribe('onLoad', (event) => {
+  console.log('Navigation completed', event)
+})
+```
+
+## Type Safety
+
+Register your router for full type safety across your application:
+
+```tsx
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router
+  }
+}
+```

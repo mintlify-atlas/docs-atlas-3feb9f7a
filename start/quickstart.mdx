@@ -1,0 +1,934 @@
+---
+title: "Quickstart"
+description: "Build your first TanStack Start application with server functions and SSR"
+---
+
+## Overview
+
+This quickstart guide will help you build a complete TanStack Start application with:
+
+- File-based routing
+- Server-side rendering (SSR)
+- Server functions for data fetching
+- Type-safe RPC calls
+- Streaming with Suspense
+
+By the end, you'll have a working full-stack application that fetches data from a server function and renders it with SSR.
+
+## Step 1: Create Your Project
+
+Start by creating a new directory and initializing a project:
+
+```bash
+mkdir my-start-app
+cd my-start-app
+npm init -y
+```
+
+## Step 2: Install Dependencies
+
+Install TanStack Start and its dependencies:
+
+<Tabs>
+  <Tab title="React">
+    ```bash
+    npm install @tanstack/react-start @tanstack/react-router react react-dom
+    npm install -D @tanstack/react-router-devtools @types/react @types/react-dom typescript vite @vitejs/plugin-react nitro
+    ```
+  </Tab>
+  <Tab title="Solid">
+    ```bash
+    npm install @tanstack/solid-start @tanstack/solid-router solid-js
+    npm install -D @tanstack/solid-router-devtools typescript vite vite-plugin-solid nitro
+    ```
+  </Tab>
+  <Tab title="Vue">
+    ```bash
+    npm install @tanstack/vue-start @tanstack/vue-router vue
+    npm install -D @tanstack/vue-router-devtools typescript vite @vitejs/plugin-vue nitro
+    ```
+  </Tab>
+</Tabs>
+
+## Step 3: Configure Vite
+
+Create a `vite.config.ts` file:
+
+<Tabs>
+  <Tab title="React">
+    ```ts vite.config.ts
+    import { defineConfig } from 'vite'
+    import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+    import viteReact from '@vitejs/plugin-react'
+    import { nitro } from 'nitro/vite'
+
+    export default defineConfig({
+      plugins: [
+        tanstackStart(),
+        viteReact(),
+        nitro(),
+      ],
+    })
+    ```
+  </Tab>
+  <Tab title="Solid">
+    ```ts vite.config.ts
+    import { defineConfig } from 'vite'
+    import { tanstackStart } from '@tanstack/solid-start/plugin/vite'
+    import viteSolid from 'vite-plugin-solid'
+    import { nitro } from 'nitro/vite'
+
+    export default defineConfig({
+      plugins: [
+        tanstackStart(),
+        viteSolid({ ssr: true }),
+        nitro(),
+      ],
+    })
+    ```
+  </Tab>
+  <Tab title="Vue">
+    ```ts vite.config.ts
+    import { defineConfig } from 'vite'
+    import { tanstackStart } from '@tanstack/vue-start/plugin/vite'
+    import viteVue from '@vitejs/plugin-vue'
+    import { nitro } from 'nitro/vite'
+
+    export default defineConfig({
+      plugins: [
+        tanstackStart(),
+        viteVue(),
+        nitro(),
+      ],
+    })
+    ```
+  </Tab>
+</Tabs>
+
+## Step 4: Configure TypeScript
+
+Create a `tsconfig.json` file:
+
+<Tabs>
+  <Tab title="React">
+    ```json tsconfig.json
+    {
+      "compilerOptions": {
+        "target": "ES2020",
+        "module": "ESNext",
+        "lib": ["ES2020", "DOM", "DOM.Iterable"],
+        "jsx": "react-jsx",
+        "strict": true,
+        "moduleResolution": "bundler",
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "types": ["vite/client"]
+      },
+      "include": ["src/**/*"]
+    }
+    ```
+  </Tab>
+  <Tab title="Solid">
+    ```json tsconfig.json
+    {
+      "compilerOptions": {
+        "target": "ES2020",
+        "module": "ESNext",
+        "lib": ["ES2020", "DOM", "DOM.Iterable"],
+        "jsx": "preserve",
+        "jsxImportSource": "solid-js",
+        "strict": true,
+        "moduleResolution": "bundler",
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "types": ["vite/client"]
+      },
+      "include": ["src/**/*"]
+    }
+    ```
+  </Tab>
+  <Tab title="Vue">
+    ```json tsconfig.json
+    {
+      "compilerOptions": {
+        "target": "ES2020",
+        "module": "ESNext",
+        "lib": ["ES2020", "DOM", "DOM.Iterable"],
+        "strict": true,
+        "moduleResolution": "bundler",
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "types": ["vite/client"]
+      },
+      "include": ["src/**/*"]
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Step 5: Create a Server Function
+
+Create a server function to fetch data. This code runs only on the server:
+
+<Tabs>
+  <Tab title="React">
+    ```tsx src/utils/posts.ts
+    import { createServerFn } from '@tanstack/react-start'
+
+    export type Post = {
+      id: number
+      title: string
+      body: string
+    }
+
+    // Server function to fetch posts
+    export const fetchPosts = createServerFn({ method: 'GET' }).handler(
+      async () => {
+        console.log('Fetching posts on server...')
+        
+        // This runs only on the server
+        const res = await fetch('https://jsonplaceholder.typicode.com/posts')
+        
+        if (!res.ok) {
+          throw new Error('Failed to fetch posts')
+        }
+        
+        const posts = await res.json()
+        return (posts as Array<Post>).slice(0, 10)
+      }
+    )
+
+    // Server function to fetch a single post
+    export const fetchPost = createServerFn({ method: 'POST' })
+      .inputValidator((id: string) => id)
+      .handler(async ({ data: postId }) => {
+        console.log(`Fetching post ${postId} on server...`)
+        
+        const res = await fetch(
+          `https://jsonplaceholder.typicode.com/posts/${postId}`
+        )
+        
+        if (!res.ok) {
+          throw new Error('Failed to fetch post')
+        }
+        
+        return await res.json() as Post
+      })
+    ```
+  </Tab>
+  <Tab title="Solid">
+    ```tsx src/utils/posts.ts
+    import { createServerFn } from '@tanstack/solid-start'
+
+    export type Post = {
+      id: number
+      title: string
+      body: string
+    }
+
+    // Server function to fetch posts
+    export const fetchPosts = createServerFn({ method: 'GET' }).handler(
+      async () => {
+        console.log('Fetching posts on server...')
+        
+        // This runs only on the server
+        const res = await fetch('https://jsonplaceholder.typicode.com/posts')
+        
+        if (!res.ok) {
+          throw new Error('Failed to fetch posts')
+        }
+        
+        const posts = await res.json()
+        return (posts as Array<Post>).slice(0, 10)
+      }
+    )
+
+    // Server function to fetch a single post
+    export const fetchPost = createServerFn({ method: 'GET' })
+      .inputValidator((id: string) => id)
+      .handler(async ({ data: postId }) => {
+        console.log(`Fetching post ${postId} on server...`)
+        
+        const res = await fetch(
+          `https://jsonplaceholder.typicode.com/posts/${postId}`
+        )
+        
+        if (!res.ok) {
+          throw new Error('Failed to fetch post')
+        }
+        
+        return await res.json() as Post
+      })
+    ```
+  </Tab>
+  <Tab title="Vue">
+    ```ts src/utils/posts.ts
+    import { createServerFn } from '@tanstack/vue-start'
+
+    export type Post = {
+      id: number
+      title: string
+      body: string
+    }
+
+    // Server function to fetch posts
+    export const fetchPosts = createServerFn({ method: 'GET' }).handler(
+      async () => {
+        console.log('Fetching posts on server...')
+        
+        // This runs only on the server
+        const res = await fetch('https://jsonplaceholder.typicode.com/posts')
+        
+        if (!res.ok) {
+          throw new Error('Failed to fetch posts')
+        }
+        
+        const posts = await res.json()
+        return (posts as Array<Post>).slice(0, 10)
+      }
+    )
+
+    // Server function to fetch a single post
+    export const fetchPost = createServerFn({ method: 'GET' })
+      .inputValidator((id: string) => id)
+      .handler(async ({ data: postId }) => {
+        console.log(`Fetching post ${postId} on server...`)
+        
+        const res = await fetch(
+          `https://jsonplaceholder.typicode.com/posts/${postId}`
+        )
+        
+        if (!res.ok) {
+          throw new Error('Failed to fetch post')
+        }
+        
+        return await res.json() as Post
+      })
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+Server functions are automatically transformed into API endpoints by the Vite plugin. The client-side calls become type-safe RPC requests.
+</Note>
+
+## Step 6: Create the Root Route
+
+Create the root route with SSR setup:
+
+<Tabs>
+  <Tab title="React">
+    ```tsx src/routes/__root.tsx
+    import {
+      HeadContent,
+      Link,
+      Scripts,
+      createRootRoute,
+    } from '@tanstack/react-router'
+    import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
+    import * as React from 'react'
+
+    export const Route = createRootRoute({
+      head: () => ({
+        meta: [
+          {
+            charSet: 'utf-8',
+          },
+          {
+            name: 'viewport',
+            content: 'width=device-width, initial-scale=1',
+          },
+        ],
+      }),
+      shellComponent: RootDocument,
+    })
+
+    function RootDocument({ children }: { children: React.ReactNode }) {
+      return (
+        <html>
+          <head>
+            <HeadContent />
+          </head>
+          <body>
+            <nav style={{ padding: '1rem', display: 'flex', gap: '1rem' }}>
+              <Link to="/" activeProps={{ style: { fontWeight: 'bold' } }}>
+                Home
+              </Link>
+              <Link to="/posts" activeProps={{ style: { fontWeight: 'bold' } }}>
+                Posts
+              </Link>
+            </nav>
+            <hr />
+            <main style={{ padding: '1rem' }}>
+              {children}
+            </main>
+            <TanStackRouterDevtools position="bottom-right" />
+            <Scripts />
+          </body>
+        </html>
+      )
+    }
+    ```
+
+    ### Key Components for SSR
+
+    - **`HeadContent`**: Renders meta tags, links, and scripts in the `<head>`
+    - **`Scripts`**: Injects necessary client-side scripts for hydration
+    - **`shellComponent`**: The outer HTML shell rendered on the server
+  </Tab>
+  <Tab title="Solid">
+    ```tsx src/routes/__root.tsx
+    import {
+      HeadContent,
+      Link,
+      Scripts,
+      createRootRoute,
+    } from '@tanstack/solid-router'
+    import { TanStackRouterDevtools } from '@tanstack/solid-router-devtools'
+    import { HydrationScript } from 'solid-js/web'
+    import type * as Solid from 'solid-js'
+
+    export const Route = createRootRoute({
+      head: () => ({
+        meta: [
+          {
+            charset: 'utf-8',
+          },
+          {
+            name: 'viewport',
+            content: 'width=device-width, initial-scale=1',
+          },
+        ],
+      }),
+      shellComponent: RootDocument,
+    })
+
+    function RootDocument({ children }: { children: Solid.JSX.Element }) {
+      return (
+        <html>
+          <head>
+            <HydrationScript />
+            <HeadContent />
+          </head>
+          <body>
+            <nav style={{ padding: '1rem', display: 'flex', gap: '1rem' }}>
+              <Link to="/" activeProps={{ style: { 'font-weight': 'bold' } }}>
+                Home
+              </Link>
+              <Link to="/posts" activeProps={{ style: { 'font-weight': 'bold' } }}>
+                Posts
+              </Link>
+            </nav>
+            <hr />
+            <main style={{ padding: '1rem' }}>
+              {children}
+            </main>
+            <TanStackRouterDevtools position="bottom-right" />
+            <Scripts />
+          </body>
+        </html>
+      )
+    }
+    ```
+
+    ### Key Components for SSR
+
+    - **`HydrationScript`**: Solid-specific hydration script (must be in `<head>`)
+    - **`HeadContent`**: Renders meta tags, links, and scripts
+    - **`Scripts`**: Injects necessary client-side scripts
+    - **`shellComponent`**: The outer HTML shell rendered on the server
+  </Tab>
+  <Tab title="Vue">
+    ```vue src/routes/__root.vue
+    <script setup lang="ts">
+    import {
+      HeadContent,
+      Link,
+      Scripts,
+      createRootRoute,
+    } from '@tanstack/vue-router'
+    import { TanStackRouterDevtools } from '@tanstack/vue-router-devtools'
+    </script>
+
+    <template>
+      <html>
+        <head>
+          <HeadContent />
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+        </head>
+        <body>
+          <nav style="padding: 1rem; display: flex; gap: 1rem;">
+            <Link to="/" :activeProps="{ style: { fontWeight: 'bold' } }">
+              Home
+            </Link>
+            <Link to="/posts" :activeProps="{ style: { fontWeight: 'bold' } }">
+              Posts
+            </Link>
+          </nav>
+          <hr />
+          <main style="padding: 1rem;">
+            <slot />
+          </main>
+          <TanStackRouterDevtools position="bottom-right" />
+          <Scripts />
+        </body>
+      </html>
+    </template>
+    ```
+
+    ### Key Components for SSR
+
+    - **`HeadContent`**: Renders meta tags, links, and scripts in the `<head>`
+    - **`Scripts`**: Injects necessary client-side scripts for hydration
+  </Tab>
+</Tabs>
+
+## Step 7: Create Route Pages
+
+Create your route pages with data loading:
+
+<Tabs>
+  <Tab title="React">
+    ```tsx src/routes/index.tsx
+    import { createFileRoute } from '@tanstack/react-router'
+
+    export const Route = createFileRoute('/')({ 
+      component: Home,
+    })
+
+    function Home() {
+      return (
+        <div>
+          <h1>Welcome to TanStack Start!</h1>
+          <p>A full-stack framework built on TanStack Router.</p>
+        </div>
+      )
+    }
+    ```
+
+    ```tsx src/routes/posts.index.tsx
+    import { createFileRoute } from '@tanstack/react-router'
+    import { fetchPosts } from '../utils/posts'
+
+    export const Route = createFileRoute('/posts/')({ 
+      loader: () => fetchPosts(),
+      component: PostsPage,
+    })
+
+    function PostsPage() {
+      const posts = Route.useLoaderData()
+      
+      return (
+        <div>
+          <h1>Posts</h1>
+          <ul>
+            {posts.map((post) => (
+              <li key={post.id}>
+                <strong>{post.title}</strong>
+                <p>{post.body}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )
+    }
+    ```
+  </Tab>
+  <Tab title="Solid">
+    ```tsx src/routes/index.tsx
+    import { createFileRoute } from '@tanstack/solid-router'
+
+    export const Route = createFileRoute('/')({ 
+      component: Home,
+    })
+
+    function Home() {
+      return (
+        <div>
+          <h1>Welcome to TanStack Start!</h1>
+          <p>A full-stack framework built on TanStack Router.</p>
+        </div>
+      )
+    }
+    ```
+
+    ```tsx src/routes/posts.index.tsx
+    import { createFileRoute } from '@tanstack/solid-router'
+    import { fetchPosts } from '../utils/posts'
+    import { For } from 'solid-js'
+
+    export const Route = createFileRoute('/posts/')({ 
+      loader: () => fetchPosts(),
+      component: PostsPage,
+    })
+
+    function PostsPage() {
+      const posts = Route.useLoaderData()
+      
+      return (
+        <div>
+          <h1>Posts</h1>
+          <ul>
+            <For each={posts}>
+              {(post) => (
+                <li>
+                  <strong>{post.title}</strong>
+                  <p>{post.body}</p>
+                </li>
+              )}
+            </For>
+          </ul>
+        </div>
+      )
+    }
+    ```
+  </Tab>
+  <Tab title="Vue">
+    ```vue src/routes/index.vue
+    <script setup lang="ts">
+    import { createFileRoute } from '@tanstack/vue-router'
+
+    export const Route = createFileRoute('/')({ 
+      component: Home,
+    })
+    </script>
+
+    <template>
+      <div>
+        <h1>Welcome to TanStack Start!</h1>
+        <p>A full-stack framework built on TanStack Router.</p>
+      </div>
+    </template>
+    ```
+
+    ```vue src/routes/posts.index.vue
+    <script setup lang="ts">
+    import { createFileRoute } from '@tanstack/vue-router'
+    import { fetchPosts } from '../utils/posts'
+
+    export const Route = createFileRoute('/posts/')({ 
+      loader: () => fetchPosts(),
+      component: PostsPage,
+    })
+
+    const posts = Route.useLoaderData()
+    </script>
+
+    <template>
+      <div>
+        <h1>Posts</h1>
+        <ul>
+          <li v-for="post in posts" :key="post.id">
+            <strong>{{ post.title }}</strong>
+            <p>{{ post.body }}</p>
+          </li>
+        </ul>
+      </div>
+    </template>
+    ```
+  </Tab>
+</Tabs>
+
+## Step 8: Create Router Configuration
+
+Create the router configuration file:
+
+<Tabs>
+  <Tab title="React">
+    ```tsx src/router.tsx
+    import { createRouter } from '@tanstack/react-router'
+    import { routeTree } from './routeTree.gen'
+
+    export function getRouter() {
+      return createRouter({
+        routeTree,
+        defaultPreload: 'intent',
+      })
+    }
+
+    declare module '@tanstack/react-router' {
+      interface Register {
+        router: ReturnType<typeof getRouter>
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Solid">
+    ```tsx src/router.tsx
+    import { createRouter } from '@tanstack/solid-router'
+    import { routeTree } from './routeTree.gen'
+
+    export function getRouter() {
+      return createRouter({
+        routeTree,
+        defaultPreload: 'intent',
+      })
+    }
+
+    declare module '@tanstack/solid-router' {
+      interface Register {
+        router: ReturnType<typeof getRouter>
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Vue">
+    ```ts src/router.ts
+    import { createRouter } from '@tanstack/vue-router'
+    import { routeTree } from './routeTree.gen'
+
+    export function getRouter() {
+      return createRouter({
+        routeTree,
+        defaultPreload: 'intent',
+      })
+    }
+
+    declare module '@tanstack/vue-router' {
+      interface Register {
+        router: ReturnType<typeof getRouter>
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Step 9: Generate Route Tree
+
+Generate the route tree file. The TanStack Start plugin will auto-generate this file, but you need to create an initial version:
+
+```tsx src/routeTree.gen.ts
+// This file is auto-generated by TanStack Router
+import { Route as rootRoute } from './routes/__root'
+import { Route as postsIndexRoute } from './routes/posts.index'
+import { Route as indexRoute } from './routes/index'
+
+export const routeTree = rootRoute.addChildren([
+  indexRoute,
+  postsIndexRoute,
+])
+```
+
+<Tip>
+In development, TanStack Router's Vite plugin will automatically regenerate this file as you add or modify routes.
+</Tip>
+
+## Step 10: Add Package Scripts
+
+Update your `package.json` with the necessary scripts:
+
+```json package.json
+{
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node .output/server/index.mjs"
+  }
+}
+```
+
+## Step 11: Run Your Application
+
+Start the development server:
+
+```bash
+npm run dev
+```
+
+Your application will be available at `http://localhost:5173` (or another port if 5173 is in use).
+
+### What's Happening?
+
+1. **SSR**: Pages are rendered on the server first
+2. **Server Functions**: The `fetchPosts` function runs on the server
+3. **Hydration**: The client-side JavaScript makes the page interactive
+4. **Type Safety**: Full type safety from server to client
+
+## Step 12: Test Server Functions
+
+Visit `http://localhost:5173/posts` and check your server logs. You should see:
+
+```
+Fetching posts on server...
+```
+
+This confirms that the server function is running on the server, not the client.
+
+## Advanced: Streaming with Suspense
+
+Add streaming support for better perceived performance:
+
+<Tabs>
+  <Tab title="React">
+    ```tsx src/routes/posts.deferred.tsx
+    import { Await, createFileRoute } from '@tanstack/react-router'
+    import { createServerFn } from '@tanstack/react-start'
+    import { Suspense } from 'react'
+
+    const slowServerFn = createServerFn({ method: 'GET' }).handler(
+      async () => {
+        await new Promise((r) => setTimeout(r, 2000))
+        return { message: 'This loaded slowly!' }
+      }
+    )
+
+    export const Route = createFileRoute('/posts/deferred')({ 
+      loader: async () => {
+        return {
+          // Don't await this - it will stream
+          deferredData: slowServerFn(),
+        }
+      },
+      component: DeferredPage,
+    })
+
+    function DeferredPage() {
+      const { deferredData } = Route.useLoaderData()
+      
+      return (
+        <div>
+          <h1>Deferred Loading</h1>
+          <Suspense fallback={<div>Loading...</div>}>
+            <Await promise={deferredData}>
+              {(data) => <p>{data.message}</p>}
+            </Await>
+          </Suspense>
+        </div>
+      )
+    }
+    ```
+  </Tab>
+  <Tab title="Solid">
+    ```tsx src/routes/posts.deferred.tsx
+    import { Await, createFileRoute } from '@tanstack/solid-router'
+    import { createServerFn } from '@tanstack/solid-start'
+    import { Suspense } from 'solid-js'
+
+    const slowServerFn = createServerFn({ method: 'GET' }).handler(
+      async () => {
+        await new Promise((r) => setTimeout(r, 2000))
+        return { message: 'This loaded slowly!' }
+      }
+    )
+
+    export const Route = createFileRoute('/posts/deferred')({ 
+      loader: async () => {
+        return {
+          // Don't await this - it will stream
+          deferredData: slowServerFn(),
+        }
+      },
+      component: DeferredPage,
+    })
+
+    function DeferredPage() {
+      const { deferredData } = Route.useLoaderData()
+      
+      return (
+        <div>
+          <h1>Deferred Loading</h1>
+          <Suspense fallback={<div>Loading...</div>}>
+            <Await promise={deferredData}>
+              {(data) => <p>{data.message}</p>}
+            </Await>
+          </Suspense>
+        </div>
+      )
+    }
+    ```
+  </Tab>
+  <Tab title="Vue">
+    ```vue src/routes/posts.deferred.vue
+    <script setup lang="ts">
+    import { Await, createFileRoute } from '@tanstack/vue-router'
+    import { createServerFn } from '@tanstack/vue-start'
+    import { Suspense } from 'vue'
+
+    const slowServerFn = createServerFn({ method: 'GET' }).handler(
+      async () => {
+        await new Promise((r) => setTimeout(r, 2000))
+        return { message: 'This loaded slowly!' }
+      }
+    )
+
+    export const Route = createFileRoute('/posts/deferred')({ 
+      loader: async () => {
+        return {
+          // Don't await this - it will stream
+          deferredData: slowServerFn(),
+        }
+      },
+      component: DeferredPage,
+    })
+
+    const { deferredData } = Route.useLoaderData()
+    </script>
+
+    <template>
+      <div>
+        <h1>Deferred Loading</h1>
+        <Suspense>
+          <template #default>
+            <Await :promise="deferredData">
+              <template #default="{ data }">
+                <p>{{ data.message }}</p>
+              </template>
+            </Await>
+          </template>
+          <template #fallback>
+            <div>Loading...</div>
+          </template>
+        </Suspense>
+      </div>
+    </template>
+    ```
+  </Tab>
+</Tabs>
+
+The page will render immediately with the fallback, then stream in the deferred data when ready.
+
+## Build for Production
+
+Build your application for production:
+
+```bash
+npm run build
+```
+
+This creates optimized builds in the `.output` directory:
+
+- **`.output/public/`**: Static client assets
+- **`.output/server/`**: Server bundle
+
+Run the production server:
+
+```bash
+npm start
+```
+
+## Next Steps
+
+Congratulations! You've built your first TanStack Start application. Here's what to explore next:
+
+<CardGroup cols={2}>
+  <Card title="Server Functions" icon="code" href="/start/concepts/server-functions">
+    Deep dive into server functions, validation, and error handling
+  </Card>
+  <Card title="SSR & Streaming" icon="water" href="/start/concepts/streaming">
+    Learn about advanced SSR and streaming patterns
+  </Card>
+  <Card title="API Routes" icon="route" href="/start/guides/api-routes">
+    Create custom API endpoints for external clients
+  </Card>
+  <Card title="Deployment" icon="cloud" href="/start/guides/deployment">
+    Deploy your app to Netlify, Vercel, Cloudflare, and more
+  </Card>
+</CardGroup>

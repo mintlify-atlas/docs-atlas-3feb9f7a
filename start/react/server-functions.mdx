@@ -1,0 +1,434 @@
+---
+title: Server Functions
+description: Learn how to create and use server functions in React Start
+---
+
+# Server Functions
+
+Server functions are the core primitive for executing code on the server in TanStack Start. They provide a type-safe way to define server-side logic that can be called from your React components.
+
+## Creating Server Functions
+
+Use `createServerFn` to define a server function:
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+
+const getUser = createServerFn({ method: 'GET' })
+  .handler(async () => {
+    // This code runs on the server
+    const user = await db.user.findFirst()
+    return user
+  })
+```
+
+## Basic Usage
+
+### GET Requests
+
+For simple data fetching, use GET requests:
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+import { createFileRoute } from '@tanstack/react-router'
+
+const fetchUser = createServerFn({ method: 'GET' }).handler(async () => {
+  const user = await db.user.findFirst()
+  return { name: user.name, email: user.email }
+})
+
+export const Route = createFileRoute('/profile')({  
+  loader: async () => {
+    const user = await fetchUser()
+    return { user }
+  },
+})
+```
+
+### POST Requests
+
+For mutations and data that requires validation, use POST requests:
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+
+const updateUser = createServerFn({ method: 'POST' })
+  .inputValidator((data: { name: string; email: string }) => data)
+  .handler(async ({ data }) => {
+    await db.user.update({
+      where: { id: 1 },
+      data: { name: data.name, email: data.email },
+    })
+    return { success: true }
+  })
+```
+
+## Input Validation
+
+Validate input data before it reaches your handler:
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+import { z } from 'zod'
+
+const userSchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
+  age: z.number().min(18),
+})
+
+const createUser = createServerFn({ method: 'POST' })
+  .inputValidator((data: unknown) => userSchema.parse(data))
+  .handler(async ({ data }) => {
+    // data is fully typed and validated
+    const user = await db.user.create({ data })
+    return user
+  })
+```
+
+### Using Validation Adapters
+
+TanStack Start provides adapters for popular validation libraries:
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+import { zodValidator } from '@tanstack/zod-adapter'
+import { z } from 'zod'
+
+const schema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+})
+
+const login = createServerFn({ method: 'POST' })
+  .inputValidator(zodValidator(schema))
+  .handler(async ({ data }) => {
+    // data is typed as { email: string, password: string }
+    return authenticateUser(data)
+  })
+```
+
+## Server Function Context
+
+Access request metadata and shared context in your handlers:
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+
+const getPost = createServerFn({ method: 'GET' })
+  .inputValidator((id: string) => id)
+  .handler(async ({ data, context, method, serverFnMeta }) => {
+    // data: validated input
+    // context: shared context from middleware
+    // method: HTTP method ('GET' or 'POST')
+    // serverFnMeta: { id, name, filename }
+    
+    const post = await db.post.findUnique({ where: { id: data } })
+    return post
+  })
+```
+
+## Calling Server Functions
+
+### From Loaders
+
+The most common pattern is calling server functions from route loaders:
+
+```tsx
+import { createFileRoute } from '@tanstack/react-router'
+import { fetchPost } from '~/utils/posts'
+
+export const Route = createFileRoute('/posts/$postId')({  
+  loader: async ({ params }) => {
+    const post = await fetchPost({ data: params.postId })
+    return { post }
+  },
+})
+```
+
+### From Components with useServerFn
+
+For client-side calls (mutations, refetching), use `useServerFn`:
+
+```tsx
+import { useServerFn } from '@tanstack/react-start'
+import { updateUser } from '~/utils/users'
+
+function ProfileEditor() {
+  const updateUserFn = useServerFn(updateUser)
+  
+  const handleSave = async () => {
+    const result = await updateUserFn({
+      data: { name: 'John', email: 'john@example.com' }
+    })
+    console.log(result)
+  }
+  
+  return <button onClick={handleSave}>Save</button>
+}
+```
+
+### Direct Calls
+
+You can also call server functions directly:
+
+```tsx
+import { fetchUser } from '~/utils/users'
+
+// In a loader or another server function
+const user = await fetchUser()
+
+// In a component (client-side)
+const user = await fetchUser({ 
+  data: userId,
+  headers: { 'x-custom': 'value' },
+  signal: abortController.signal,
+})
+```
+
+## Middleware
+
+Add middleware to server functions for cross-cutting concerns:
+
+```tsx
+import { createServerFn, createMiddleware } from '@tanstack/react-start'
+
+const authMiddleware = createMiddleware({ type: 'function' })
+  .server(async ({ next, context }) => {
+    const session = await getSession(context.request)
+    if (!session) {
+      throw new Error('Unauthorized')
+    }
+    return next({ context: { user: session.user } })
+  })
+
+const getProfile = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    // context.user is available from middleware
+    return { name: context.user.name }
+  })
+```
+
+## Error Handling
+
+Server functions propagate errors to the client:
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+import { notFound } from '@tanstack/react-router'
+
+const getPost = createServerFn({ method: 'GET' })
+  .inputValidator((id: string) => id)
+  .handler(async ({ data }) => {
+    const post = await db.post.findUnique({ where: { id: data } })
+    
+    if (!post) {
+      throw notFound() // Special router error
+    }
+    
+    return post
+  })
+```
+
+## Redirects
+
+Redirect users from server functions:
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+import { redirect } from '@tanstack/react-router'
+
+const logout = createServerFn({ method: 'POST' }).handler(async () => {
+  await clearSession()
+  throw redirect({ to: '/login' })
+})
+```
+
+## Streaming Responses
+
+Stream data back to the client using `RawStream`:
+
+```tsx
+import { createServerFn, RawStream } from '@tanstack/react-start'
+
+const streamLogs = createServerFn({ method: 'GET' }).handler(async () => {
+  return new RawStream(async (controller) => {
+    for (let i = 0; i < 10; i++) {
+      controller.send(`Log ${i}\n`)
+      await new Promise(r => setTimeout(r, 100))
+    }
+    controller.end()
+  })
+})
+```
+
+## Server-Only Imports
+
+Mark modules as server-only to prevent them from being bundled for the client:
+
+```tsx
+import '@tanstack/react-start/server-only'
+import { createServerFn } from '@tanstack/react-start'
+import { db } from '~/db' // This will never be sent to the client
+
+const getUsers = createServerFn({ method: 'GET' }).handler(async () => {
+  return db.user.findMany()
+})
+```
+
+## Client-Only Imports
+
+Mark modules as client-only:
+
+```tsx
+import '@tanstack/react-start/client-only'
+// This module will error if imported on the server
+```
+
+## Type Safety
+
+Server functions are fully type-safe:
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+
+const getUser = createServerFn({ method: 'GET' })
+  .inputValidator((id: string) => id)
+  .handler(async ({ data }) => {
+    return { id: data, name: 'John', age: 30 }
+  })
+
+// TypeScript knows the return type
+const user = await getUser({ data: '123' })
+// user: { id: string, name: string, age: number }
+```
+
+## Best Practices
+
+### Co-locate with Features
+
+Keep server functions close to where they're used:
+
+```
+src/
+  routes/
+    posts/
+      index.tsx
+  utils/
+    posts.ts  # Server functions for posts
+    users.ts  # Server functions for users
+```
+
+### Reuse Across Routes
+
+Define server functions once and import them across multiple routes:
+
+```tsx
+// utils/posts.ts
+export const fetchPosts = createServerFn({ method: 'GET' }).handler(/*..*/)
+export const fetchPost = createServerFn({ method: 'GET' }).handler(/*..*/)
+
+// routes/posts/index.tsx
+import { fetchPosts } from '~/utils/posts'
+
+// routes/posts/$postId.tsx  
+import { fetchPost } from '~/utils/posts'
+```
+
+### Validate All Inputs
+
+Always validate POST request data:
+
+```tsx
+const createPost = createServerFn({ method: 'POST' })
+  .inputValidator(zodValidator(postSchema)) // ✅ Good
+  .handler(async ({ data }) => { /*...*/ })
+
+const badCreatePost = createServerFn({ method: 'POST' })
+  .handler(async ({ data }) => { // ❌ Bad - no validation
+    // data is unknown
+  })
+```
+
+### Handle Errors Gracefully
+
+Provide meaningful error messages:
+
+```tsx
+const updateProfile = createServerFn({ method: 'POST' })
+  .inputValidator(profileSchema)
+  .handler(async ({ data }) => {
+    try {
+      return await db.user.update({ where: { id: data.id }, data })
+    } catch (error) {
+      if (error.code === 'P2025') {
+        throw new Error('User not found')
+      }
+      throw new Error('Failed to update profile')
+    }
+  })
+```
+
+## API Reference
+
+### createServerFn(options?)
+
+Creates a new server function builder.
+
+**Parameters:**
+- `options.method`: `'GET' | 'POST'` - HTTP method (default: `'GET'`)
+
+**Returns:** `ServerFnBuilder`
+
+### ServerFnBuilder Methods
+
+#### .inputValidator(validator)
+
+Adds input validation to the server function.
+
+**Parameters:**
+- `validator`: Function or adapter that validates input data
+
+**Returns:** `ServerFnAfterValidator`
+
+#### .middleware(middlewares)
+
+Adds middleware to the server function.
+
+**Parameters:**
+- `middlewares`: Array of middleware functions
+
+**Returns:** `ServerFnAfterMiddleware`
+
+#### .handler(fn)
+
+Defines the server function implementation.
+
+**Parameters:**
+- `fn`: `(ctx: ServerFnCtx) => Promise<T>` - Handler function
+
+**Returns:** `Fetcher<T>` - Callable server function
+
+### ServerFnCtx
+
+Context object passed to handler functions:
+
+```tsx
+interface ServerFnCtx {
+  data: unknown            // Validated input data
+  context: Record<string, any>  // Shared context from middleware
+  method: 'GET' | 'POST'   // HTTP method
+  serverFnMeta: {
+    id: string             // Unique function ID
+    name: string           // Function variable name
+    filename: string       // Source file path
+  }
+}
+```
+
+## Related
+
+- [Client Functions](/start/react/client-functions) - Client-side only functions
+- [Components](/start/react/components) - React Start components
+- [Middleware](/start/guides/middleware) - Request and function middleware

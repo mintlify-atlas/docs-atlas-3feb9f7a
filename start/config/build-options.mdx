@@ -1,0 +1,517 @@
+---
+title: Build Options
+description: Configure build settings for TanStack Start applications
+---
+
+TanStack Start uses Vite's environment API to build separate client and server bundles. This guide covers build-specific configuration options.
+
+## Build Architecture
+
+TanStack Start creates two separate build environments:
+
+- **Client Environment**: Browser-side code with optimized assets
+- **Server Environment**: Node.js code for SSR and server functions
+
+Each environment can be configured independently through Vite's `environments` configuration.
+
+## Output Directories
+
+By default, TanStack Start outputs builds to:
+
+```
+dist/
+  client/     # Client assets
+  server/     # Server bundle
+```
+
+You can customize output directories:
+
+```tsx
+import { defineConfig } from 'vite'
+import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+
+export default defineConfig({
+  build: {
+    outDir: 'build', // Base output directory (default: 'dist')
+  },
+  environments: {
+    client: {
+      build: {
+        outDir: 'build/public', // Custom client output
+      },
+    },
+    ssr: {
+      build: {
+        outDir: 'build/server', // Custom server output
+      },
+    },
+  },
+  plugins: [tanstackStart()],
+})
+```
+
+## Client Build Options
+
+Configure the client environment build:
+
+```tsx
+export default defineConfig({
+  environments: {
+    client: {
+      build: {
+        // Rollup options for client bundle
+        rollupOptions: {
+          input: {
+            main: 'virtual:tanstack-start-client-entry',
+          },
+          output: {
+            manualChunks: {
+              vendor: ['react', 'react-dom'],
+            },
+          },
+        },
+        // Minification
+        minify: 'esbuild', // 'esbuild' | 'terser' | false
+        // Source maps
+        sourcemap: true,
+        // Target browsers
+        target: 'es2020',
+        // CSS code splitting
+        cssCodeSplit: true,
+        // Asset inlining threshold
+        assetsInlineLimit: 4096,
+      },
+    },
+  },
+  plugins: [tanstackStart()],
+})
+```
+
+### Client Asset Base Path
+
+Control where client assets are served from:
+
+```tsx
+tanstackStart({
+  client: {
+    base: '/_build', // Default: '/_build'
+  },
+})
+
+// Or use Vite's base option
+export default defineConfig({
+  base: '/my-app/', // Affects all assets
+})
+```
+
+## Server Build Options
+
+Configure the server environment build:
+
+```tsx
+export default defineConfig({
+  environments: {
+    ssr: {
+      build: {
+        ssr: true, // Required for server builds
+        // Rollup options for server bundle
+        rollupOptions: {
+          input: 'virtual:tanstack-start-server-entry',
+          output: {
+            format: 'esm', // or 'cjs'
+          },
+        },
+        // Don't minify server code (easier debugging)
+        minify: false,
+        // Source maps for server
+        sourcemap: true,
+        // Target Node.js version
+        target: 'node18',
+        // Don't copy public directory in server build
+        copyPublicDir: false,
+      },
+    },
+  },
+  plugins: [tanstackStart()],
+})
+```
+
+### Static NODE_ENV Replacement
+
+Replace `process.env.NODE_ENV` at build time for dead code elimination:
+
+```tsx
+tanstackStart({
+  server: {
+    build: {
+      staticNodeEnv: true, // default: true
+    },
+  },
+})
+```
+
+When enabled, `process.env.NODE_ENV` is replaced with the actual value during build, allowing bundlers to eliminate dead code:
+
+```tsx
+// Before build
+if (process.env.NODE_ENV === 'development') {
+  console.log('Debug info')
+}
+
+// After production build
+// (code is eliminated)
+```
+
+## Dependency Optimization
+
+Configure how dependencies are bundled:
+
+```tsx
+export default defineConfig({
+  environments: {
+    client: {
+      optimizeDeps: {
+        // Dependencies to exclude from pre-bundling
+        exclude: ['@tanstack/react-start', '@tanstack/react-router'],
+        // Dependencies to include (CJS to ESM conversion)
+        include: ['react', 'react-dom', 'react-dom/client'],
+        // Force optimization on these
+        force: false,
+      },
+    },
+    ssr: {
+      optimizeDeps: {
+        // Disable server-side optimization by default
+        noDiscovery: true,
+      },
+    },
+  },
+  resolve: {
+    // Don't externalize these packages
+    noExternal: ['@tanstack/start**', '@tanstack/react-start**'],
+  },
+  plugins: [tanstackStart()],
+})
+```
+
+## Code Splitting
+
+Control code splitting behavior:
+
+```tsx
+export default defineConfig({
+  environments: {
+    client: {
+      build: {
+        rollupOptions: {
+          output: {
+            // Manual chunks for better caching
+            manualChunks: (id) => {
+              if (id.includes('node_modules')) {
+                if (id.includes('react') || id.includes('react-dom')) {
+                  return 'vendor-react'
+                }
+                return 'vendor'
+              }
+            },
+            // Chunk file naming
+            chunkFileNames: 'assets/[name]-[hash].js',
+            entryFileNames: 'assets/[name]-[hash].js',
+            assetFileNames: 'assets/[name]-[hash][extname]',
+          },
+        },
+      },
+    },
+  },
+  plugins: [tanstackStart()],
+})
+```
+
+## Build Targets
+
+Specify target environments:
+
+```tsx
+export default defineConfig({
+  environments: {
+    client: {
+      build: {
+        target: [
+          'es2020',
+          'edge88',
+          'firefox78',
+          'chrome87',
+          'safari14',
+        ],
+      },
+    },
+    ssr: {
+      build: {
+        target: 'node18', // Match your deployment Node.js version
+      },
+    },
+  },
+  plugins: [tanstackStart()],
+})
+```
+
+## Production Optimizations
+
+### Minification
+
+```tsx
+export default defineConfig({
+  environments: {
+    client: {
+      build: {
+        minify: 'esbuild', // Fast, default
+        // Or use Terser for better compression
+        minify: 'terser',
+        terserOptions: {
+          compress: {
+            drop_console: true, // Remove console.log in production
+          },
+        },
+      },
+    },
+  },
+  plugins: [tanstackStart()],
+})
+```
+
+### Tree Shaking
+
+Vite automatically tree-shakes unused code. Ensure your dependencies support ES modules:
+
+```json
+// package.json
+{
+  "type": "module"
+}
+```
+
+### Compression
+
+Use a Vite plugin to compress assets:
+
+```tsx
+import viteCompression from 'vite-plugin-compression'
+
+export default defineConfig({
+  plugins: [
+    tanstackStart(),
+    viteCompression({
+      algorithm: 'gzip',
+      ext: '.gz',
+    }),
+    viteCompression({
+      algorithm: 'brotliCompress',
+      ext: '.br',
+    }),
+  ],
+})
+```
+
+## Custom Build Process
+
+The build process can be customized using Vite's `builder` API:
+
+```tsx
+export default defineConfig({
+  builder: {
+    sharedPlugins: true, // Share plugins between environments
+    async buildApp(builder) {
+      // Custom build logic
+      const client = builder.environments['client']
+      const server = builder.environments['ssr']
+      
+      // Build in custom order
+      await builder.build(client)
+      await builder.build(server)
+      
+      // Post-build processing
+      console.log('Build complete!')
+    },
+  },
+  plugins: [tanstackStart()],
+})
+```
+
+## Environment-Specific Configuration
+
+Use different settings per environment:
+
+```tsx
+export default defineConfig(({ mode }) => {
+  const isDev = mode === 'development'
+  
+  return {
+    environments: {
+      client: {
+        build: {
+          sourcemap: isDev, // Source maps only in dev
+          minify: !isDev, // Minify only in production
+        },
+      },
+    },
+    plugins: [
+      tanstackStart({
+        server: {
+          build: {
+            staticNodeEnv: !isDev, // Replace NODE_ENV in production
+          },
+        },
+      }),
+    ],
+  }
+})
+```
+
+## Build Analysis
+
+Analyze your bundle size:
+
+```tsx
+import { visualizer } from 'rollup-plugin-visualizer'
+
+export default defineConfig({
+  plugins: [
+    tanstackStart(),
+    visualizer({
+      open: true,
+      gzipSize: true,
+      brotliSize: true,
+    }),
+  ],
+})
+```
+
+Run build and open the generated stats.html file.
+
+## Common Build Patterns
+
+### Library Mode
+
+If building a library on top of TanStack Start:
+
+```tsx
+export default defineConfig({
+  build: {
+    lib: {
+      entry: 'src/index.ts',
+      formats: ['es', 'cjs'],
+    },
+    rollupOptions: {
+      external: [
+        'react',
+        'react-dom',
+        '@tanstack/react-start',
+        '@tanstack/react-router',
+      ],
+    },
+  },
+})
+```
+
+### Multi-Page Application
+
+Build multiple entry points:
+
+```tsx
+export default defineConfig({
+  environments: {
+    client: {
+      build: {
+        rollupOptions: {
+          input: {
+            main: 'src/client.tsx',
+            admin: 'src/admin/client.tsx',
+          },
+        },
+      },
+    },
+  },
+  plugins: [tanstackStart()],
+})
+```
+
+## Build Performance
+
+### Parallel Builds
+
+Vite builds environments in parallel by default. Control concurrency:
+
+```tsx
+export default defineConfig({
+  builder: {
+    async buildApp(builder) {
+      // Build environments in parallel
+      await Promise.all([
+        builder.build(builder.environments.client),
+        builder.build(builder.environments.ssr),
+      ])
+    },
+  },
+  plugins: [tanstackStart()],
+})
+```
+
+### Cache Configuration
+
+Configure Rollup cache:
+
+```tsx
+export default defineConfig({
+  environments: {
+    client: {
+      build: {
+        rollupOptions: {
+          cache: true, // Enable Rollup cache
+        },
+      },
+    },
+  },
+  plugins: [tanstackStart()],
+})
+```
+
+## Troubleshooting
+
+### Debugging Build Issues
+
+Enable verbose logging:
+
+```bash
+DEBUG=vite:* npm run build
+```
+
+### CommonJS Issues
+
+If you encounter CommonJS dependency issues:
+
+```tsx
+export default defineConfig({
+  environments: {
+    ssr: {
+      build: {
+        commonjsOptions: {
+          include: [/node_modules/], // Convert CJS to ESM
+          transformMixedEsModules: true,
+        },
+      },
+    },
+  },
+  plugins: [tanstackStart()],
+})
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Server Options" icon="server" href="/start/config/server-options">
+    Configure server-side rendering options
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/start/guides/deployment">
+    Deploy your TanStack Start application
+  </Card>
+</CardGroup>

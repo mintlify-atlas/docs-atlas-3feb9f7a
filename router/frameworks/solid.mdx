@@ -1,0 +1,653 @@
+---
+title: Solid Router
+description: Use TanStack Router with SolidJS for type-safe, reactive routing with built-in caching and URL state management.
+---
+
+# TanStack Solid Router
+
+TanStack Router provides first-class support for SolidJS with a reactive, type-safe routing solution. It integrates seamlessly with Solid's fine-grained reactivity system and provides built-in caching, preloading, and URL state management.
+
+## Installation
+
+Install the Solid Router package:
+
+```bash
+npm install @tanstack/solid-router
+# or
+pnpm add @tanstack/solid-router
+# or
+yarn add @tanstack/solid-router
+```
+
+## Quick Start
+
+Here's a minimal example to get started with TanStack Router in a SolidJS application:
+
+```tsx
+import { render } from 'solid-js/web'
+import {
+  RouterProvider,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Link,
+  Outlet,
+} from '@tanstack/solid-router'
+
+// Create the root route
+const rootRoute = createRootRoute({
+  component: () => (
+    <>
+      <div class="p-2 flex gap-2">
+        <Link to="/" class="[&.active]:font-bold">
+          Home
+        </Link>
+        <Link to="/about" class="[&.active]:font-bold">
+          About
+        </Link>
+      </div>
+      <hr />
+      <Outlet />
+    </>
+  ),
+})
+
+// Create child routes
+const indexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  component: () => <div>Welcome Home!</div>,
+})
+
+const aboutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/about',
+  component: () => <div>About Page</div>,
+})
+
+// Create the route tree
+const routeTree = rootRoute.addChildren([indexRoute, aboutRoute])
+
+// Create the router
+const router = createRouter({
+  routeTree,
+  defaultPreload: 'intent',
+})
+
+// Register for type safety
+declare module '@tanstack/solid-router' {
+  interface Register {
+    router: typeof router
+  }
+}
+
+// Render the app
+render(() => <RouterProvider router={router} />, document.getElementById('app')!)
+```
+
+**Source:** `packages/solid-router/src/router.ts:76-78`
+
+## Core Concepts
+
+### Reactive Data with Signals
+
+Solid Router integrates with SolidJS's reactive primitives. Data returned from hooks are wrapped in signals for automatic reactivity:
+
+```tsx
+import { useParams, useSearch, useLoaderData } from '@tanstack/solid-router'
+
+function PostComponent() {
+  const params = useParams()
+  const search = useSearch()
+  const data = postRoute.useLoaderData()
+  
+  // Access values via function call (signal accessors)
+  return (
+    <div>
+      <h1>{data().title}</h1>
+      <p>Post ID: {params.postId}</p>
+      <p>Filter: {search().filter}</p>
+    </div>
+  )
+}
+```
+
+### Router Components
+
+Solid Router provides reactive components that work with Solid's JSX:
+
+#### `<RouterProvider>`
+
+The top-level component that provides the router to your application:
+
+```tsx
+import { RouterProvider } from '@tanstack/solid-router'
+
+render(() => <RouterProvider router={router} />, rootElement)
+```
+
+**Source:** `packages/solid-router/src/RouterProvider.tsx:1-47`
+
+#### `<Link>`
+
+Creates type-safe navigation links with automatic active states:
+
+```tsx
+import { Link } from '@tanstack/solid-router'
+
+<Link
+  to="/posts/$postId"
+  params={{ postId: '123' }}
+  search={{ filter: 'active' }}
+  activeProps={{ class: 'font-bold' }}
+  preload="intent"
+>
+  View Post
+</Link>
+```
+
+**Source:** `packages/solid-router/src/link.tsx:605-646`
+
+#### `<Outlet>`
+
+Renders child route components:
+
+```tsx
+import { Outlet } from '@tanstack/solid-router'
+
+function LayoutComponent() {
+  return (
+    <div>
+      <header>My App</header>
+      <main>
+        <Outlet />
+      </main>
+    </div>
+  )
+}
+```
+
+**Source:** `packages/solid-router/src/Match.tsx`
+
+### Router Hooks
+
+All hooks return reactive Solid signals for automatic updates:
+
+#### `useRouter`
+
+Access the router instance:
+
+```tsx
+import { useRouter } from '@tanstack/solid-router'
+
+function MyComponent() {
+  const router = useRouter()
+  
+  const handleNavigate = () => {
+    router.navigate({ to: '/posts' })
+  }
+  
+  return <button onClick={handleNavigate}>Go to Posts</button>
+}
+```
+
+**Source:** `packages/solid-router/src/useRouter.tsx:6-15`
+
+#### `useNavigate`
+
+Get a type-safe navigate function:
+
+```tsx
+import { useNavigate } from '@tanstack/solid-router'
+
+function MyComponent() {
+  const navigate = useNavigate()
+  
+  const goToPost = () => {
+    navigate({
+      to: '/posts/$postId',
+      params: { postId: '123' },
+      search: { tab: 'comments' },
+    })
+  }
+  
+  return <button onClick={goToPost}>View Post</button>
+}
+```
+
+#### `useParams`
+
+Access route parameters:
+
+```tsx
+import { useParams } from '@tanstack/solid-router'
+
+function PostPage() {
+  const params = useParams()
+  
+  return <h1>Post ID: {params.postId}</h1>
+}
+```
+
+#### `useSearch`
+
+Access search parameters:
+
+```tsx
+import { useSearch } from '@tanstack/solid-router'
+
+function PostList() {
+  const search = useSearch()
+  
+  return <div>Filter: {search().filter}</div>
+}
+```
+
+#### `useLoaderData`
+
+Access loader data for the current route:
+
+```tsx
+const postRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts/$postId',
+  loader: async ({ params }) => {
+    return fetchPost(params.postId)
+  },
+  component: PostComponent,
+})
+
+function PostComponent() {
+  const post = postRoute.useLoaderData()
+  
+  return (
+    <div>
+      <h1>{post().title}</h1>
+      <p>{post().body}</p>
+    </div>
+  )
+}
+```
+
+#### `useRouterState`
+
+Access reactive router state:
+
+```tsx
+import { useRouterState } from '@tanstack/solid-router'
+
+function StatusBar() {
+  const isLoading = useRouterState({
+    select: (state) => state.status === 'pending',
+  })
+  
+  return <Show when={isLoading()}>Loading...</Show>
+}
+```
+
+## Data Loading
+
+### Route Loaders
+
+Define data loading at the route level:
+
+```tsx
+import { createRoute } from '@tanstack/solid-router'
+
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts',
+  loader: async () => {
+    const response = await fetch('/api/posts')
+    return response.json()
+  },
+  component: PostsList,
+})
+
+function PostsList() {
+  const posts = postsRoute.useLoaderData()
+  
+  return (
+    <For each={posts()}>
+      {(post) => <div>{post.title}</div>}
+    </For>
+  )
+}
+```
+
+**Source:** `packages/solid-router/src/route.tsx`
+
+### Loader Context
+
+Loaders receive context with params, search, and more:
+
+```tsx
+const postRoute = createRoute({
+  getParentRoute: () => postsRoute,
+  path: '$postId',
+  loader: async ({ params, context, abortController }) => {
+    const response = await fetch(`/api/posts/${params.postId}`, {
+      signal: abortController.signal,
+    })
+    return response.json()
+  },
+})
+```
+
+### Error Handling
+
+Handle errors with error components:
+
+```tsx
+import { ErrorComponent } from '@tanstack/solid-router'
+import type { ErrorComponentProps } from '@tanstack/solid-router'
+
+const postRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts/$postId',
+  loader: async ({ params }) => {
+    const response = await fetch(`/api/posts/${params.postId}`)
+    if (!response.ok) throw new Error('Post not found')
+    return response.json()
+  },
+  errorComponent: PostErrorComponent,
+})
+
+function PostErrorComponent({ error }: ErrorComponentProps) {
+  if (error instanceof NotFoundError) {
+    return <div>Post not found: {error.message}</div>
+  }
+  
+  return <ErrorComponent error={error} />
+}
+```
+
+**Source:** `packages/solid-router/src/CatchBoundary.tsx`
+
+## Navigation
+
+### Programmatic Navigation
+
+```tsx
+import { useNavigate } from '@tanstack/solid-router'
+
+function SearchForm() {
+  const navigate = useNavigate()
+  const [query, setQuery] = createSignal('')
+  
+  const handleSubmit = (e: Event) => {
+    e.preventDefault()
+    navigate({
+      to: '/search',
+      search: { q: query() },
+    })
+  }
+  
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        value={query()}
+        onInput={(e) => setQuery(e.currentTarget.value)}
+      />
+      <button type="submit">Search</button>
+    </form>
+  )
+}
+```
+
+### Link Preloading
+
+Automatically preload routes on hover, focus, or when visible:
+
+```tsx
+<Link
+  to="/posts/$postId"
+  params={{ postId: '123' }}
+  preload="intent"  // Preload on hover/focus
+>
+  View Post
+</Link>
+
+<Link
+  to="/dashboard"
+  preload="viewport"  // Preload when visible
+>
+  Dashboard
+</Link>
+```
+
+**Source:** `packages/solid-router/src/link.tsx:200-207`
+
+## File-Based Routing
+
+TanStack Router supports file-based routing for SolidJS. Use the Vite plugin to automatically generate routes:
+
+### Setup
+
+```bash
+pnpm add -D @tanstack/router-plugin
+```
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite'
+import solid from 'vite-plugin-solid'
+import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
+
+export default defineConfig({
+  plugins: [
+    TanStackRouterVite(),
+    solid(),
+  ],
+})
+```
+
+### Route Files
+
+Create routes in the `src/routes/` directory:
+
+```tsx
+// src/routes/__root.tsx
+import { createRootRoute, Outlet } from '@tanstack/solid-router'
+
+export const Route = createRootRoute({
+  component: () => (
+    <>
+      <nav>My App</nav>
+      <Outlet />
+    </>
+  ),
+})
+```
+
+```tsx
+// src/routes/index.tsx
+import { createFileRoute } from '@tanstack/solid-router'
+
+export const Route = createFileRoute('/')({ 
+  component: () => <div>Home Page</div>,
+})
+```
+
+```tsx
+// src/routes/posts/$postId.tsx
+import { createFileRoute } from '@tanstack/solid-router'
+
+export const Route = createFileRoute('/posts/$postId')({
+  loader: async ({ params }) => {
+    return fetchPost(params.postId)
+  },
+  component: PostComponent,
+})
+
+function PostComponent() {
+  const post = Route.useLoaderData()
+  return <h1>{post().title}</h1>
+}
+```
+
+**Source:** `packages/solid-router/src/fileRoute.ts`
+
+## Type Safety
+
+Register your router for full type safety across your application:
+
+```tsx
+declare module '@tanstack/solid-router' {
+  interface Register {
+    router: typeof router
+  }
+}
+```
+
+This enables:
+- Autocomplete for route paths
+- Type-safe params and search parameters
+- Type-safe loader data
+- Type-safe navigation
+
+## SSR Support
+
+TanStack Solid Router supports server-side rendering:
+
+```tsx
+// server.tsx
+import { renderToString } from 'solid-js/web'
+import { StartServer } from '@tanstack/solid-start/server'
+
+export function render(url: string) {
+  return renderToString(() => <StartServer url={url} />)
+}
+```
+
+For full SSR support, consider using [TanStack Start](/start/introduction), the full-stack framework built on TanStack Router.
+
+## DevTools
+
+Add the TanStack Router DevTools to inspect routing state during development:
+
+```tsx
+import { TanStackRouterDevtools } from '@tanstack/solid-router-devtools'
+
+const rootRoute = createRootRoute({
+  component: () => (
+    <>
+      <Outlet />
+      <TanStackRouterDevtools position="bottom-right" />
+    </>
+  ),
+})
+```
+
+## Advanced Features
+
+### Search Parameter Validation
+
+Validate and parse search parameters with schemas:
+
+```tsx
+import { z } from 'zod'
+import { createRoute } from '@tanstack/solid-router'
+
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts',
+  validateSearch: z.object({
+    page: z.number().default(1),
+    filter: z.enum(['all', 'published', 'draft']).default('all'),
+  }),
+  component: PostsList,
+})
+
+function PostsList() {
+  const search = useSearch({ from: postsRoute.id })
+  
+  return (
+    <div>
+      <p>Page: {search().page}</p>
+      <p>Filter: {search().filter}</p>
+    </div>
+  )
+}
+```
+
+### Route Context
+
+Share data between parent and child routes:
+
+```tsx
+const rootRoute = createRootRouteWithContext<{
+  userId: string
+}>()({
+  component: RootComponent,
+})
+
+const router = createRouter({
+  routeTree,
+  context: {
+    userId: '123',
+  },
+})
+
+const dashboardRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/dashboard',
+  loader: ({ context }) => {
+    // Access context.userId
+    return fetchUserDashboard(context.userId)
+  },
+})
+```
+
+### Lazy Loading
+
+Lazy load route components for code splitting:
+
+```tsx
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts',
+  component: () => {
+    const PostsList = lazy(() => import('./PostsList'))
+    return <PostsList />
+  },
+})
+```
+
+## Migration from Solid Router
+
+If you're migrating from `@solidjs/router`, here are the key differences:
+
+| Solid Router | TanStack Router |
+|-------------|----------------|
+| `<Router>` | `<RouterProvider>` |
+| `<Routes>` | Route tree with `createRouter` |
+| `<Route>` | `createRoute` |
+| `<A>` | `<Link>` |
+| `useParams()` | `useParams()` (returns signal) |
+| `useSearchParams()` | `useSearch()` |
+| `useLocation()` | `useLocation()` |
+| `useNavigate()` | `useNavigate()` |
+
+## API Reference
+
+For detailed API documentation, see:
+
+- [Router API](/router/react/router) - Core router APIs apply to Solid
+- [Route API](/router/react/route) - Route creation and configuration
+- [Link API](/router/react/link) - Navigation components
+- [Hooks API](/router/react/hooks) - Available hooks
+
+## Examples
+
+Explore example applications in the repository:
+
+- [Basic Solid Router](https://github.com/TanStack/router/tree/main/examples/solid/basic)
+- [File-Based Routing](https://github.com/TanStack/router/tree/main/examples/solid/basic-file-based)
+- [Solid Query Integration](https://github.com/TanStack/router/tree/main/examples/solid/basic-solid-query)
+
+## Resources
+
+- [GitHub Repository](https://github.com/TanStack/router)
+- [Discord Community](https://discord.com/invite/WrRKjPJ)
+- [SolidJS Documentation](https://solidjs.com)

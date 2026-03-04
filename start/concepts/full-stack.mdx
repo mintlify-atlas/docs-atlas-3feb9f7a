@@ -1,0 +1,279 @@
+---
+title: Full-Stack Architecture
+description: Learn how TanStack Start provides a unified full-stack architecture with type-safe communication between client and server.
+---
+
+# Full-Stack Architecture
+
+TanStack Start is a full-stack framework built on top of TanStack Router that enables you to build modern web applications with seamless client-server integration. It combines the power of server-side rendering (SSR), streaming, and server functions into a unified development experience.
+
+## Overview
+
+TanStack Start provides a complete full-stack solution that includes:
+
+- **Unified Router**: Built on TanStack Router with file-based or code-based routing
+- **Server Functions**: Type-safe RPC-like functions that run on the server
+- **SSR & Streaming**: Server-side rendering with progressive hydration
+- **API Routes**: File-based API endpoints with full HTTP method support
+- **Middleware System**: Request and function-level middleware for cross-cutting concerns
+- **Built-in Bundling**: Powered by Vite with optimized code splitting
+
+## Architecture Components
+
+### Client-Server Split
+
+TanStack Start automatically splits your application into client and server bundles:
+
+```tsx
+// This code runs on both client and server
+import { createFileRoute } from '@tanstack/react-router'
+import { createServerFn } from '@tanstack/react-start'
+
+// Server function - runs only on the server
+const getUser = createServerFn({ method: 'GET' })
+  .inputValidator((id: string) => id)
+  .handler(async ({ data: userId }) => {
+    // This code only runs on the server
+    const user = await db.users.findById(userId)
+    return user
+  })
+
+// Route component - runs on both server (SSR) and client
+export const Route = createFileRoute('/users/$userId')({ 
+  loader: async ({ params }) => {
+    // Call server function - works on both client and server
+    const user = await getUser({ data: params.userId })
+    return { user }
+  },
+  component: UserProfile,
+})
+
+function UserProfile() {
+  const { user } = Route.useLoaderData()
+  return <div>{user.name}</div>
+}
+```
+
+Reference: `packages/start-server-core/src/createStartHandler.ts:352`
+
+### Package Structure
+
+TanStack Start is organized into specialized packages:
+
+- **`@tanstack/start-client-core`**: Client-side runtime for server function calls
+- **`@tanstack/start-server-core`**: Server-side request handling and SSR
+- **`@tanstack/react-start`**: React-specific bindings and components
+- **`@tanstack/start-plugin-core`**: Build-time transformations and routing
+
+## Request Flow
+
+Here's how a typical request flows through TanStack Start:
+
+### 1. Initial Page Load (SSR)
+
+```
+┌─────────┐      ┌──────────────┐      ┌─────────────┐
+│ Browser │─────>│ Start Handler│─────>│   Router    │
+└─────────┘      └──────────────┘      └─────────────┘
+                        │                      │
+                        │                      ▼
+                        │              ┌──────────────┐
+                        │              │ Route Loader │
+                        │              └──────────────┘
+                        │                      │
+                        │                      ▼
+                        │              ┌──────────────┐
+                        │              │Server Function│
+                        │              └──────────────┘
+                        │                      │
+                        ▼                      ▼
+                 ┌────────────────────────────────┐
+                 │   Rendered HTML + Hydration   │
+                 └────────────────────────────────┘
+```
+
+### 2. Client-Side Navigation
+
+```
+┌─────────┐      ┌──────────────┐      ┌─────────────┐
+│  Click  │─────>│    Router    │─────>│Route Loader │
+└─────────┘      └──────────────┘      └─────────────┘
+                                                │
+                                                ▼
+                                        ┌──────────────┐
+                                        │ Server Fn RPC│
+                                        └──────────────┘
+                                                │
+                                                ▼
+                                        ┌──────────────┐
+                                        │ HTTP Request │
+                                        └──────────────┘
+```
+
+## Start Handler
+
+The `createStartHandler` function is the entry point for your server:
+
+```tsx
+import { createStartHandler, defaultStreamHandler } from '@tanstack/react-start/server'
+
+export default createStartHandler({
+  handler: defaultStreamHandler,
+})
+```
+
+The handler:
+
+1. Normalizes incoming requests
+2. Executes request middleware
+3. Routes to server functions or page routes
+4. Handles SSR and streaming responses
+5. Manages asset URLs and manifests
+
+Reference: `packages/start-server-core/src/createStartHandler.ts:353-650`
+
+## Type Safety
+
+TanStack Start provides end-to-end type safety:
+
+```tsx
+import { z } from 'zod'
+import { createServerFn } from '@tanstack/react-start'
+
+// Define input schema
+const updateUser = createServerFn({ method: 'POST' })
+  .inputValidator(z.object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string().email(),
+  }))
+  .handler(async ({ data }) => {
+    // `data` is fully typed!
+    // { id: string, name: string, email: string }
+    await db.users.update(data.id, {
+      name: data.name,
+      email: data.email,
+    })
+    return { success: true }
+  })
+
+// Type-safe call
+await updateUser({ 
+  data: { 
+    id: '1', 
+    name: 'John', 
+    email: 'john@example.com' 
+  } 
+})
+```
+
+## Environment Detection
+
+TanStack Start automatically handles code that runs in different environments:
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+
+const getSecret = createServerFn({ method: 'GET' }).handler(() => {
+  // This code only runs on the server
+  // Environment variables are safe here
+  return process.env.SECRET_KEY
+})
+
+// This runs on both client and server
+function MyComponent() {
+  const [secret, setSecret] = useState(null)
+  
+  useEffect(() => {
+    // Server function call from client
+    getSecret().then(setSecret)
+  }, [])
+  
+  return <div>{secret}</div>
+}
+```
+
+## Development vs Production
+
+TanStack Start optimizes differently for each environment:
+
+### Development
+
+- Hot module replacement (HMR) for instant updates
+- Source maps for debugging
+- Detailed error messages
+- Fresh manifest on each request for route-specific styles
+
+### Production
+
+- Optimized bundles with code splitting
+- Cached manifests for performance
+- Minified assets
+- CDN-ready asset URLs
+
+Reference: `packages/start-server-core/src/createStartHandler.ts:165-173`
+
+## Middleware System
+
+TanStack Start supports two types of middleware:
+
+### Request Middleware
+
+Runs once per HTTP request:
+
+```tsx
+import { createMiddleware } from '@tanstack/react-start'
+
+export const authMiddleware = createMiddleware()
+  .server(async ({ request, next }) => {
+    const session = await getSession(request.headers.get('cookie'))
+    return next({ context: { session } })
+  })
+```
+
+### Function Middleware
+
+Runs for each server function call:
+
+```tsx
+import { createMiddleware } from '@tanstack/react-start'
+
+export const loggingMiddleware = createMiddleware()
+  .server(async ({ next, context }) => {
+    console.log('Function called with context:', context)
+    const result = await next()
+    console.log('Function completed')
+    return result
+  })
+```
+
+Reference: `packages/start-client-core/src/createServerFn.ts:196-336`
+
+## Asset Management
+
+TanStack Start automatically manages your application assets:
+
+```tsx
+import { createStartHandler, defaultStreamHandler } from '@tanstack/react-start/server'
+
+export default createStartHandler({
+  handler: defaultStreamHandler,
+  // Transform asset URLs for CDN
+  transformAssetUrls: 'https://cdn.example.com',
+})
+```
+
+This transforms:
+
+- JavaScript module preloads
+- CSS stylesheet links
+- Client entry scripts
+
+Reference: `packages/start-server-core/src/createStartHandler.ts:59-112`
+
+## Next Steps
+
+- Learn about [Server Functions](./server-functions) for client-server communication
+- Explore [SSR](./ssr) capabilities for server-side rendering
+- Understand [Streaming](./streaming) for progressive rendering
+- Review [Deployment](./deployment) strategies for production

@@ -1,0 +1,164 @@
+---
+title: Webpack Plugin API
+---
+
+# Webpack Plugin
+
+Webpack plugin for TanStack Router with route generation and code splitting.
+
+## Installation
+
+```bash
+npm install @tanstack/router-plugin
+```
+
+## Basic Usage
+
+```js
+// webpack.config.js
+const { TanStackRouterWebpack } = require('@tanstack/router-plugin/webpack')
+
+module.exports = {
+  plugins: [
+    TanStackRouterWebpack()
+  ]
+}
+```
+
+## Configuration Options
+
+Same options as the Vite plugin:
+
+<ParamField path="routesDirectory" type="string">
+  Directory containing route files.
+  
+  **Default:** `'./src/routes'`
+</ParamField>
+
+<ParamField path="generatedRouteTree" type="string">
+  Output path for generated route tree.
+  
+  **Default:** `'./src/routeTree.gen.ts'`
+</ParamField>
+
+<ParamField path="routeFileIgnorePrefix" type="string">
+  Prefix to ignore when generating routes.
+  
+  **Default:** `'-'`
+</ParamField>
+
+<ParamField path="autoCodeSplitting" type="boolean">
+  Enable automatic code splitting.
+  
+  **Default:** `false`
+</ParamField>
+
+<ParamField path="codeSplittingOptions" type="CodeSplittingOptions">
+  Code splitting configuration.
+</ParamField>
+
+## Examples
+
+### Basic Setup
+
+```js
+// webpack.config.js
+const { TanStackRouterWebpack } = require('@tanstack/router-plugin/webpack')
+
+module.exports = {
+  entry: './src/index.tsx',
+  output: {
+    path: path.resolve(__dirname, 'dist'),
+    filename: 'bundle.js'
+  },
+  plugins: [
+    TanStackRouterWebpack()
+  ],
+  module: {
+    rules: [
+      {
+        test: /\.tsx?$/,
+        use: 'ts-loader',
+        exclude: /node_modules/
+      }
+    ]
+  }
+}
+```
+
+### With Code Splitting
+
+```js
+const { TanStackRouterWebpack } = require('@tanstack/router-plugin/webpack')
+
+module.exports = {
+  plugins: [
+    TanStackRouterWebpack({
+      autoCodeSplitting: true,
+      codeSplittingOptions: {
+        defaultBehavior: [
+          ['component'],
+          ['loader'],
+          ['pendingComponent', 'errorComponent']
+        ]
+      }
+    })
+  ],
+  optimization: {
+    splitChunks: {
+      chunks: 'all'
+    }
+  }
+}
+```
+
+### TypeScript Configuration
+
+```js
+const { TanStackRouterWebpack } = require('@tanstack/router-plugin/webpack')
+
+module.exports = {
+  plugins: [
+    TanStackRouterWebpack({
+      routesDirectory: './src/pages',
+      generatedRouteTree: './src/pages/routeTree.gen.ts',
+      quoteStyle: 'double',
+      semicolons: true
+    })
+  ]
+}
+```
+
+### Production Optimization
+
+```js
+const { TanStackRouterWebpack } = require('@tanstack/router-plugin/webpack')
+
+module.exports = {
+  mode: 'production',
+  plugins: [
+    TanStackRouterWebpack({
+      autoCodeSplitting: true,
+      codeSplittingOptions: {
+        defaultBehavior: [
+          ['component'],
+          ['loader'],
+          ['pendingComponent', 'errorComponent']
+        ]
+      }
+    })
+  ],
+  optimization: {
+    minimize: true,
+    splitChunks: {
+      chunks: 'all',
+      cacheGroups: {
+        routes: {
+          test: /[\\/]routes[\\/]/,
+          priority: -10
+        }
+      }
+    }
+  }
+}
+```

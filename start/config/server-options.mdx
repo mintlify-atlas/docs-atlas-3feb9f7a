@@ -1,0 +1,591 @@
+---
+title: Server Options
+description: Configure server-side rendering and server functions in TanStack Start
+---
+
+TanStack Start provides extensive server-side configuration options for SSR, server functions, and deployment targets.
+
+## Server Entry
+
+Customize the server entry point:
+
+```tsx
+import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+
+export default defineConfig({
+  plugins: [
+    tanstackStart({
+      server: {
+        entry: './src/server.ts', // Custom server entry
+      },
+    }),
+  ],
+})
+```
+
+Default server entry (if not specified):
+
+```tsx
+// Default server.ts
+import { createStartHandler, defaultStreamHandler } from '@tanstack/start/server'
+import { getRouterManifest } from '@tanstack/start/router-manifest'
+
+export default createStartHandler({
+  createRouter: () => import('#tanstack-router-entry'),
+  getRouterManifest,
+})(defaultStreamHandler)
+```
+
+## Server Functions
+
+Configure how server functions are handled:
+
+```tsx
+tanstackStart({
+  serverFns: {
+    base: '/_serverFn', // Base path for server function endpoints
+    generateFunctionId: ({ filename, functionName }) => {
+      // Custom ID generation for server functions
+      const cleanFilename = filename.replace(/^.*\/src\//, '')
+      return `${cleanFilename}:${functionName}`
+    },
+  },
+})
+```
+
+### Function ID Generation
+
+By default, server functions receive auto-generated IDs. Customize this:
+
+```tsx
+generateFunctionId: ({ filename, functionName }) => {
+  // Use file path + function name
+  return `${filename}:${functionName}`
+  
+  // Or use a hash for shorter IDs
+  const hash = createHash('md5')
+    .update(filename + functionName)
+    .digest('hex')
+    .slice(0, 8)
+  return hash
+}
+```
+
+### Server Function Base Path
+
+Server functions are served from a base path:
+
+```tsx
+tanstackStart({
+  serverFns: {
+    base: '/_serverFn', // default
+  },
+  router: {
+    basepath: '/app',
+  },
+})
+
+// Functions will be at: /app/_serverFn/:functionId
+```
+
+## Server Build Configuration
+
+Configure server-side build options:
+
+```tsx
+tanstackStart({
+  server: {
+    build: {
+      staticNodeEnv: true, // Replace process.env.NODE_ENV at build time
+    },
+  },
+})
+```
+
+### Static NODE_ENV Replacement
+
+When `staticNodeEnv` is enabled (default), `process.env.NODE_ENV` is replaced with its actual value during build:
+
+```tsx
+// Development code
+if (process.env.NODE_ENV === 'development') {
+  console.log('Debug information')
+}
+
+// Production build output
+// (code is eliminated completely)
+```
+
+Disable this if you need dynamic NODE_ENV checks:
+
+```tsx
+tanstackStart({
+  server: {
+    build: {
+      staticNodeEnv: false,
+    },
+  },
+})
+```
+
+## Development Server
+
+Configure development server behavior:
+
+```tsx
+export default defineConfig({
+  server: {
+    port: 3000,
+    host: 'localhost',
+    cors: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+      },
+    },
+  },
+  plugins: [
+    tanstackStart({
+      dev: {
+        ssrStyles: {
+          enabled: true, // Enable SSR styles in dev
+          basepath: '/', // Base path for style URLs
+        },
+      },
+    }),
+  ],
+})
+```
+
+### SSR Styles in Development
+
+During development, CSS modules need special handling for SSR:
+
+```tsx
+tanstackStart({
+  dev: {
+    ssrStyles: {
+      enabled: true, // default: true
+      basepath: '/_styles', // custom base path
+    },
+  },
+})
+```
+
+Disable if you're using a CSS-in-JS solution that doesn't require it:
+
+```tsx
+dev: {
+  ssrStyles: {
+    enabled: false,
+  },
+}
+```
+
+### Middleware Mode
+
+Use TanStack Start as middleware in an existing server:
+
+```tsx
+export default defineConfig({
+  server: {
+    middlewareMode: true,
+  },
+  plugins: [tanstackStart()],
+})
+```
+
+Then in your server:
+
+```tsx
+import express from 'express'
+import { createServer } from 'vite'
+
+const app = express()
+const vite = await createServer({
+  server: { middlewareMode: true },
+})
+
+app.use(vite.middlewares)
+app.listen(3000)
+```
+
+## Server Handler
+
+Customize the request handler:
+
+```tsx
+// src/server.ts
+import { createStartHandler } from '@tanstack/start/server'
+import { getRouterManifest } from '@tanstack/start/router-manifest'
+
+export default createStartHandler({
+  createRouter: () => import('#tanstack-router-entry'),
+  getRouterManifest,
+})((request, context) => {
+  // Custom handler
+  return new Response('Hello World', {
+    headers: { 'Content-Type': 'text/plain' },
+  })
+})
+```
+
+### Stream Handler
+
+Use the default stream handler for SSR:
+
+```tsx
+import {
+  createStartHandler,
+  defaultStreamHandler,
+} from '@tanstack/start/server'
+
+export default createStartHandler({
+  createRouter: () => import('#tanstack-router-entry'),
+  getRouterManifest,
+})(defaultStreamHandler)
+```
+
+### Custom Response Headers
+
+Add custom headers to all responses:
+
+```tsx
+export default createStartHandler({
+  createRouter: () => import('#tanstack-router-entry'),
+  getRouterManifest,
+})(async (request, context) => {
+  const response = await defaultStreamHandler(request, context)
+  
+  response.headers.set('X-Powered-By', 'TanStack Start')
+  response.headers.set('X-Custom-Header', 'value')
+  
+  return response
+})
+```
+
+## Server-Only Code
+
+Ensure code only runs on the server:
+
+```tsx
+import { envOnly } from '@tanstack/start'
+
+// This code will be removed from client bundle
+const serverConfig = envOnly.server(() => {
+  return {
+    apiKey: process.env.API_KEY,
+    dbConnection: process.env.DATABASE_URL,
+  }
+})
+```
+
+### Import Protection
+
+Prevent server-only imports from leaking to the client:
+
+```tsx
+tanstackStart({
+  importProtection: {
+    enabled: true,
+    client: {
+      specifiers: [
+        'fs',
+        'path',
+        'crypto',
+        'node:fs',
+        'node:path',
+      ],
+      files: [
+        /\.server\./,  // Files with .server. in name
+        /\/server\//,  // Files in server/ directory
+      ],
+    },
+  },
+})
+```
+
+See [Import Protection](/start/config/vite-plugin#import-protection) for more details.
+
+## Prerendering
+
+Configure static site generation:
+
+```tsx
+tanstackStart({
+  prerender: {
+    enabled: true,
+    concurrency: 4, // Parallel prerender workers
+    failOnError: true, // Fail build on prerender error
+    autoStaticPathsDiscovery: true, // Auto-discover static routes
+    maxRedirects: 5, // Follow redirects during prerender
+    crawlLinks: true, // Crawl <a> tags to find pages
+    retryCount: 3, // Retry failed pages
+    retryDelay: 1000, // Delay between retries (ms)
+    headers: {
+      'User-Agent': 'TanStack-Start-Prerenderer',
+    },
+  },
+})
+```
+
+### Page-Specific Prerender Options
+
+```tsx
+tanstackStart({
+  pages: [
+    {
+      path: '/',
+      prerender: {
+        enabled: true,
+        outputPath: '/index.html',
+        autoSubfolderIndex: true, // Create /path/index.html for /path
+      },
+    },
+    {
+      path: '/blog/*',
+      prerender: {
+        crawlLinks: true, // Discover blog posts via links
+      },
+    },
+  ],
+})
+```
+
+### Prerender Success Callback
+
+```tsx
+tanstackStart({
+  prerender: {
+    onSuccess: ({ page, html }) => {
+      console.log(`✓ Prerendered ${page.path}`)
+      // Custom processing
+      const optimizedHtml = minifyHtml(html)
+      return optimizedHtml
+    },
+  },
+})
+```
+
+## Deployment Targets
+
+### Node.js Server
+
+Default setup works for Node.js:
+
+```bash
+npm run build
+node dist/server/server.js
+```
+
+### Vercel
+
+No additional configuration needed:
+
+```json
+// vercel.json
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist/client"
+}
+```
+
+### Netlify
+
+Use Netlify Edge Functions:
+
+```toml
+# netlify.toml
+[build]
+  command = "npm run build"
+  publish = "dist/client"
+
+[[edge_functions]]
+  function = "server"
+  path = "/*"
+```
+
+### Cloudflare Workers
+
+Configure for Workers runtime:
+
+```tsx
+export default defineConfig({
+  environments: {
+    ssr: {
+      build: {
+        target: 'es2020', // Workers target
+        rollupOptions: {
+          output: {
+            format: 'esm',
+          },
+        },
+      },
+    },
+  },
+  plugins: [tanstackStart()],
+})
+```
+
+### Docker
+
+Example Dockerfile:
+
+```dockerfile
+FROM node:18-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --only=production
+
+COPY dist ./dist
+
+EXPOSE 3000
+CMD ["node", "dist/server/server.js"]
+```
+
+## Custom Server Environments
+
+Create a custom server environment for edge deployments:
+
+```tsx
+export default defineConfig({
+  environments: {
+    client: { consumer: 'client' },
+    ssr: { consumer: 'server' },
+    edge: {
+      consumer: 'server',
+      build: {
+        ssr: true,
+        target: 'es2020',
+        outDir: 'dist/edge',
+      },
+    },
+  },
+  plugins: [
+    tanstackStart({
+      serverFn: {
+        providerEnv: 'edge', // Use edge environment for server functions
+      },
+    }),
+  ],
+})
+```
+
+## Environment Variables
+
+Load environment variables:
+
+```tsx
+// .env
+PUBLIC_API_URL=https://api.example.com
+SECRET_KEY=secret123
+```
+
+```tsx
+// Use in server code
+import { envOnly } from '@tanstack/start'
+
+const config = envOnly.server(() => ({
+  apiUrl: process.env.PUBLIC_API_URL,
+  secretKey: process.env.SECRET_KEY, // Only available on server
+}))
+```
+
+Public variables (prefixed with `PUBLIC_`) are available on the client:
+
+```tsx
+// Client-side
+const apiUrl = import.meta.env.PUBLIC_API_URL
+```
+
+## Performance Optimization
+
+### Response Caching
+
+```tsx
+export default createStartHandler({
+  createRouter: () => import('#tanstack-router-entry'),
+  getRouterManifest,
+})(async (request, context) => {
+  const response = await defaultStreamHandler(request, context)
+  
+  // Cache static pages
+  if (request.url.startsWith('/blog/')) {
+    response.headers.set('Cache-Control', 'public, max-age=3600')
+  }
+  
+  return response
+})
+```
+
+### Compression
+
+Enable response compression:
+
+```tsx
+import { compress } from '@tanstack/start/server'
+
+export default createStartHandler({
+  createRouter: () => import('#tanstack-router-entry'),
+  getRouterManifest,
+})(async (request, context) => {
+  const response = await defaultStreamHandler(request, context)
+  return compress(response)
+})
+```
+
+## Monitoring and Logging
+
+Add request logging:
+
+```tsx
+export default createStartHandler({
+  createRouter: () => import('#tanstack-router-entry'),
+  getRouterManifest,
+})(async (request, context) => {
+  const start = Date.now()
+  
+  const response = await defaultStreamHandler(request, context)
+  
+  const duration = Date.now() - start
+  console.log(`${request.method} ${request.url} - ${response.status} (${duration}ms)`)
+  
+  return response
+})
+```
+
+## Error Handling
+
+Custom error responses:
+
+```tsx
+export default createStartHandler({
+  createRouter: () => import('#tanstack-router-entry'),
+  getRouterManifest,
+})(async (request, context) => {
+  try {
+    return await defaultStreamHandler(request, context)
+  } catch (error) {
+    console.error('Server error:', error)
+    
+    return new Response('Internal Server Error', {
+      status: 500,
+      headers: { 'Content-Type': 'text/plain' },
+    })
+  }
+})
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Server Functions" icon="function" href="/start/guides/server-functions">
+    Learn how to create and use server functions
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/start/guides/deployment">
+    Deploy your TanStack Start application
+  </Card>
+</CardGroup>

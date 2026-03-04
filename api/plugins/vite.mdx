@@ -1,0 +1,439 @@
+---
+title: Vite Plugin API
+---
+
+# Vite Plugin
+
+Vite plugin for TanStack Router with automatic route generation, code splitting, and development features.
+
+## Installation
+
+```bash
+npm install @tanstack/router-plugin
+```
+
+## Basic Usage
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite'
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
+
+export default defineConfig({
+  plugins: [
+    tanstackRouter()
+  ]
+})
+```
+
+## Configuration Options
+
+<ParamField path="routesDirectory" type="string">
+  Directory containing route files.
+  
+  **Default:** `'./src/routes'`
+  
+  ```ts
+  tanstackRouter({
+    routesDirectory: './app/routes'
+  })
+  ```
+</ParamField>
+
+<ParamField path="generatedRouteTree" type="string">
+  Output path for generated route tree file.
+  
+  **Default:** `'./src/routeTree.gen.ts'`
+  
+  ```ts
+  tanstackRouter({
+    generatedRouteTree: './app/routeTree.gen.ts'
+  })
+  ```
+</ParamField>
+
+<ParamField path="routeFileIgnorePrefix" type="string">
+  Prefix to ignore when generating routes.
+  
+  **Default:** `'-'`
+  
+  ```ts
+  tanstackRouter({
+    routeFileIgnorePrefix: '_'
+  })
+  ```
+  
+  Files starting with this prefix (e.g., `_component.tsx`) will be ignored.
+</ParamField>
+
+<ParamField path="routeFileIgnorePattern" type="RegExp">
+  Pattern to ignore when generating routes.
+  
+  ```ts
+  tanstackRouter({
+    routeFileIgnorePattern: /\.test\./
+  })
+  ```
+</ParamField>
+
+<ParamField path="quoteStyle" type="'single' | 'double'">
+  Quote style for generated code.
+  
+  **Default:** `'single'`
+  
+  ```ts
+  tanstackRouter({
+    quoteStyle: 'double'
+  })
+  ```
+</ParamField>
+
+<ParamField path="semicolons" type="boolean">
+  Whether to use semicolons in generated code.
+  
+  **Default:** `false`
+  
+  ```ts
+  tanstackRouter({
+    semicolons: true
+  })
+  ```
+</ParamField>
+
+<ParamField path="autoCodeSplitting" type="boolean">
+  Enable automatic code splitting.
+  
+  **Default:** `false`
+  
+  ```ts
+  tanstackRouter({
+    autoCodeSplitting: true
+  })
+  ```
+</ParamField>
+
+<ParamField path="codeSplittingOptions" type="CodeSplittingOptions">
+  Advanced code splitting configuration.
+  
+  ```ts
+  tanstackRouter({
+    autoCodeSplitting: true,
+    codeSplittingOptions: {
+      defaultBehavior: [
+        ['component'],
+        ['pendingComponent', 'errorComponent']
+      ]
+    }
+  })
+  ```
+</ParamField>
+
+<ParamField path="enableRouteGeneration" type="boolean">
+  Enable/disable route generation.
+  
+  **Default:** `true`
+  
+  ```ts
+  tanstackRouter({
+    enableRouteGeneration: false
+  })
+  ```
+</ParamField>
+
+## Code Splitting Options
+
+Configure how routes are split into separate chunks.
+
+<ParamField path="defaultBehavior" type="Array<Array<string>>">
+  Default splitting strategy for all routes.
+  
+  **Default:** `[['component'], ['pendingComponent'], ['errorComponent'], ['notFoundComponent']]`
+  
+  ```ts
+  codeSplittingOptions: {
+    // Split component and loader together
+    defaultBehavior: [
+      ['component', 'loader'],
+      ['pendingComponent'],
+      ['errorComponent']
+    ]
+  }
+  ```
+</ParamField>
+
+<ParamField path="splitBehavior" type="(params: { routeId: string }) => Array<Array<string>> | undefined">
+  Custom splitting strategy per route.
+  
+  ```ts
+  codeSplittingOptions: {
+    splitBehavior: ({ routeId }) => {
+      // Don't split the index route
+      if (routeId === '/') {
+        return undefined
+      }
+      
+      // Custom splitting for admin routes
+      if (routeId.startsWith('/admin')) {
+        return [
+          ['component', 'loader', 'pendingComponent']
+        ]
+      }
+      
+      // Use default for others
+      return undefined
+    }
+  }
+  ```
+</ParamField>
+
+<ParamField path="deleteNodes" type="Array<string>">
+  Route properties to remove during splitting.
+  
+  ```ts
+  codeSplittingOptions: {
+    deleteNodes: ['staticData', 'meta']
+  }
+  ```
+</ParamField>
+
+<ParamField path="addHmr" type="boolean">
+  Add Hot Module Replacement support.
+  
+  **Default:** `true`
+  
+  ```ts
+  codeSplittingOptions: {
+    addHmr: false
+  }
+  ```
+</ParamField>
+
+## Examples
+
+### Basic Setup
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
+
+export default defineConfig({
+  plugins: [
+    react(),
+    tanstackRouter()
+  ]
+})
+```
+
+### Custom Routes Directory
+
+```ts
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
+
+export default defineConfig({
+  plugins: [
+    tanstackRouter({
+      routesDirectory: './src/pages',
+      generatedRouteTree: './src/pages/routeTree.gen.ts'
+    })
+  ]
+})
+```
+
+### With Code Splitting
+
+```ts
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
+
+export default defineConfig({
+  plugins: [
+    tanstackRouter({
+      autoCodeSplitting: true,
+      codeSplittingOptions: {
+        // Split components and loaders separately
+        defaultBehavior: [
+          ['component'],
+          ['loader'],
+          ['pendingComponent', 'errorComponent']
+        ]
+      }
+    })
+  ]
+})
+```
+
+### Custom File Patterns
+
+```ts
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
+
+export default defineConfig({
+  plugins: [
+    tanstackRouter({
+      routeFileIgnorePrefix: '_',
+      routeFileIgnorePattern: /\.(test|spec)\./,
+      quoteStyle: 'double',
+      semicolons: true
+    })
+  ]
+})
+```
+
+### Per-Route Code Splitting
+
+```ts
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
+
+export default defineConfig({
+  plugins: [
+    tanstackRouter({
+      autoCodeSplitting: true,
+      codeSplittingOptions: {
+        splitBehavior: ({ routeId }) => {
+          // Don't split the root and index routes
+          if (routeId === '__root__' || routeId === '/') {
+            return undefined
+          }
+          
+          // Split admin routes more aggressively
+          if (routeId.startsWith('/admin')) {
+            return [
+              ['component'],
+              ['loader'],
+              ['beforeLoad'],
+              ['pendingComponent'],
+              ['errorComponent']
+            ]
+          }
+          
+          // Default splitting for other routes
+          return [
+            ['component', 'pendingComponent'],
+            ['loader'],
+            ['errorComponent']
+          ]
+        }
+      }
+    })
+  ]
+})
+```
+
+### Monorepo Setup
+
+```ts
+import { defineConfig } from 'vite'
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
+import path from 'path'
+
+export default defineConfig({
+  plugins: [
+    tanstackRouter({
+      routesDirectory: path.resolve(__dirname, './src/routes'),
+      generatedRouteTree: path.resolve(__dirname, './src/routeTree.gen.ts')
+    })
+  ]
+})
+```
+
+### With Multiple Environments
+
+```ts
+import { defineConfig } from 'vite'
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
+
+export default defineConfig(({ mode }) => ({
+  plugins: [
+    tanstackRouter({
+      autoCodeSplitting: mode === 'production',
+      codeSplittingOptions: {
+        addHmr: mode === 'development'
+      }
+    })
+  ]
+}))
+```
+
+## Generated Files
+
+The plugin generates a `routeTree.gen.ts` file:
+
+```ts
+// routeTree.gen.ts (auto-generated)
+import { Route as rootRoute } from './routes/__root'
+import { Route as IndexRoute } from './routes/index'
+import { Route as PostsRoute } from './routes/posts'
+import { Route as PostsIndexRoute } from './routes/posts/index'
+import { Route as PostsPostIdRoute } from './routes/posts/$postId'
+
+export const routeTree = rootRoute.addChildren([
+  IndexRoute,
+  PostsRoute.addChildren([
+    PostsIndexRoute,
+    PostsPostIdRoute
+  ])
+])
+```
+
+## File-Based Routing Conventions
+
+```
+src/routes/
+  __root.tsx         -> / (root layout)
+  index.tsx          -> / (index page)
+  about.tsx          -> /about
+  posts.tsx          -> /posts (layout)
+  posts/
+    index.tsx        -> /posts (index)
+    $postId.tsx      -> /posts/:postId
+    $postId/
+      edit.tsx       -> /posts/:postId/edit
+  _components/       -> Ignored (starts with _)
+  -utils.ts          -> Ignored (starts with -)
+```
+
+## TypeScript Support
+
+The plugin automatically generates TypeScript types:
+
+```ts
+// Generated types are automatically picked up
+import { Link } from '@tanstack/react-router'
+
+// Full autocomplete for routes
+<Link to="/posts/$postId" params={{ postId: '123' }} />
+```
+
+## Hot Module Replacement
+
+The plugin supports HMR for route updates:
+
+- Add/remove route files → route tree updates automatically
+- Edit route components → hot reload without full page refresh
+- Update route config → route tree regenerates
+
+## Troubleshooting
+
+### Routes Not Generating
+
+Check that:
+- `routesDirectory` path is correct
+- Route files have proper extensions (`.tsx`, `.ts`)
+- Files don't start with ignore prefix
+
+### Type Errors
+
+Ensure:
+- Generated route tree file is in your `tsconfig.json` include
+- Router is properly registered in your app
+
+```ts
+// tsconfig.json
+{
+  "include": [
+    "src/**/*",
+    "src/routeTree.gen.ts" // Include generated file
+  ]
+}
+```

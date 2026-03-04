@@ -1,0 +1,666 @@
+---
+title: React Hooks API
+---
+
+# React Hooks
+
+Type-safe React hooks for accessing router state, route data, and navigation.
+
+## useRouter
+
+Access the router instance.
+
+```tsx
+import { useRouter } from '@tanstack/react-router'
+
+function MyComponent() {
+  const router = useRouter()
+  
+  const handleInvalidate = () => {
+    router.invalidate()
+  }
+  
+  return <button onClick={handleInvalidate}>Refresh Data</button>
+}
+```
+
+### Router Methods
+
+```tsx
+const router = useRouter()
+
+// Navigate
+await router.navigate({ to: '/posts' })
+
+// Invalidate and refetch
+await router.invalidate()
+
+// Build location
+const location = router.buildLocation({ to: '/posts' })
+
+// Match route
+const match = router.matchRoute({ to: '/posts' })
+
+// Preload route
+await router.preloadRoute({ to: '/posts/$postId', params: { postId: '123' } })
+```
+
+## useRouterState
+
+Access and subscribe to router state.
+
+```tsx
+import { useRouterState } from '@tanstack/react-router'
+
+function NavigationStatus() {
+  const isLoading = useRouterState({ select: (s) => s.isLoading })
+  const location = useRouterState({ select: (s) => s.location })
+  
+  return (
+    <div>
+      {isLoading && <LoadingBar />}
+      <p>Current path: {location.pathname}</p>
+    </div>
+  )
+}
+```
+
+### Options
+
+<ParamField path="select" type="(state: RouterState) => any">
+  Select specific data from router state.
+  
+  ```tsx
+  const pathname = useRouterState({
+    select: (s) => s.location.pathname
+  })
+  ```
+</ParamField>
+
+### RouterState Properties
+
+<ResponseField name="location" type="ParsedLocation">
+  Current location object.
+</ResponseField>
+
+<ResponseField name="matches" type="RouteMatch[]">
+  Array of current route matches.
+</ResponseField>
+
+<ResponseField name="pendingMatches" type="RouteMatch[]">
+  Matches being loaded.
+</ResponseField>
+
+<ResponseField name="status" type="'pending' | 'idle'">
+  Router status.
+</ResponseField>
+
+<ResponseField name="isLoading" type="boolean">
+  Whether router is loading.
+</ResponseField>
+
+<ResponseField name="isTransitioning" type="boolean">
+  Whether router is transitioning.
+</ResponseField>
+
+## useLocation
+
+Access the current location.
+
+```tsx
+import { useLocation } from '@tanstack/react-router'
+
+function LocationInfo() {
+  const location = useLocation()
+  
+  return (
+    <div>
+      <p>Pathname: {location.pathname}</p>
+      <p>Search: {JSON.stringify(location.search)}</p>
+      <p>Hash: {location.hash}</p>
+    </div>
+  )
+}
+```
+
+### Options
+
+<ParamField path="select" type="(location: ParsedLocation) => any">
+  Select specific data from location.
+  
+  ```tsx
+  const pathname = useLocation({
+    select: (location) => location.pathname
+  })
+  ```
+</ParamField>
+
+## useParams
+
+Access route parameters with type safety.
+
+```tsx
+import { useParams } from '@tanstack/react-router'
+
+function PostDetails() {
+  const params = useParams({ from: '/posts/$postId' })
+  //    ^? { postId: string }
+  
+  return <div>Post ID: {params.postId}</div>
+}
+```
+
+### Options
+
+<ParamField path="from" type="string">
+  Route ID for type inference.
+  
+  ```tsx
+  const params = useParams({ from: '/posts/$postId' })
+  ```
+</ParamField>
+
+<ParamField path="strict" type="boolean">
+  Throw error if route doesn't match.
+  
+  **Default:** `true`
+</ParamField>
+
+<ParamField path="select" type="(params) => any">
+  Select specific params.
+  
+  ```tsx
+  const postId = useParams({
+    from: '/posts/$postId',
+    select: (params) => params.postId
+  })
+  ```
+</ParamField>
+
+## useSearch
+
+Access validated search parameters.
+
+```tsx
+import { useSearch } from '@tanstack/react-router'
+import { z } from 'zod'
+
+// Route with validated search
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts',
+  validateSearch: z.object({
+    page: z.number().default(1),
+    filter: z.string().optional()
+  })
+})
+
+function PostsList() {
+  const { page, filter } = useSearch({ from: '/posts' })
+  //    ^? { page: number, filter?: string }
+  
+  return <div>Page {page}</div>
+}
+```
+
+### Options
+
+<ParamField path="from" type="string">
+  Route ID for type inference.
+</ParamField>
+
+<ParamField path="strict" type="boolean">
+  Throw error if route doesn't match.
+  
+  **Default:** `true`
+</ParamField>
+
+<ParamField path="select" type="(search) => any">
+  Select specific search params.
+  
+  ```tsx
+  const page = useSearch({
+    from: '/posts',
+    select: (search) => search.page
+  })
+  ```
+</ParamField>
+
+## useLoaderData
+
+Access loader data with type safety.
+
+```tsx
+import { useLoaderData } from '@tanstack/react-router'
+
+const postRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts/$postId',
+  loader: async ({ params }) => {
+    const post = await fetchPost(params.postId)
+    return { post }
+  }
+})
+
+function PostDetails() {
+  const { post } = useLoaderData({ from: '/posts/$postId' })
+  //    ^? { post: Post }
+  
+  return <h1>{post.title}</h1>
+}
+```
+
+### Options
+
+<ParamField path="from" type="string">
+  Route ID for type inference.
+</ParamField>
+
+<ParamField path="strict" type="boolean">
+  Throw error if route doesn't match.
+  
+  **Default:** `true`
+</ParamField>
+
+<ParamField path="select" type="(data) => any">
+  Select specific data.
+  
+  ```tsx
+  const title = useLoaderData({
+    from: '/posts/$postId',
+    select: (data) => data.post.title
+  })
+  ```
+</ParamField>
+
+## useLoaderDeps
+
+Access loader dependencies.
+
+```tsx
+import { useLoaderDeps } from '@tanstack/react-router'
+
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts',
+  loaderDeps: ({ search }) => ({
+    page: search.page,
+    filter: search.filter
+  }),
+  loader: async ({ deps }) => {
+    const posts = await fetchPosts(deps.page, deps.filter)
+    return { posts }
+  }
+})
+
+function PostsList() {
+  const deps = useLoaderDeps({ from: '/posts' })
+  return <div>Loading page {deps.page}</div>
+}
+```
+
+## useRouteContext
+
+Access route context.
+
+```tsx
+import { useRouteContext } from '@tanstack/react-router'
+
+const postsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts',
+  context: () => ({
+    title: 'Blog Posts'
+  })
+})
+
+function PostsHeader() {
+  const context = useRouteContext({ from: '/posts' })
+  return <h1>{context.title}</h1>
+}
+```
+
+### Options
+
+<ParamField path="from" type="string">
+  Route ID for type inference.
+</ParamField>
+
+<ParamField path="strict" type="boolean">
+  Throw error if route doesn't match.
+  
+  **Default:** `true`
+</ParamField>
+
+<ParamField path="select" type="(context) => any">
+  Select specific context data.
+</ParamField>
+
+## useMatch
+
+Access a specific route match.
+
+```tsx
+import { useMatch } from '@tanstack/react-router'
+
+function PostStatus() {
+  const match = useMatch({ from: '/posts/$postId' })
+  
+  return (
+    <div>
+      <p>Status: {match.status}</p>
+      <p>Loading: {match.isFetching ? 'Yes' : 'No'}</p>
+    </div>
+  )
+}
+```
+
+### Options
+
+<ParamField path="from" type="string">
+  Route ID for type inference.
+</ParamField>
+
+<ParamField path="strict" type="boolean">
+  Throw error if route doesn't match.
+  
+  **Default:** `true`
+</ParamField>
+
+<ParamField path="select" type="(match) => any">
+  Select specific match data.
+  
+  ```tsx
+  const status = useMatch({
+    from: '/posts/$postId',
+    select: (match) => match.status
+  })
+  ```
+</ParamField>
+
+## useMatches
+
+Access all current route matches.
+
+```tsx
+import { useMatches } from '@tanstack/react-router'
+
+function Breadcrumbs() {
+  const matches = useMatches()
+  
+  return (
+    <nav>
+      {matches.map((match, i) => (
+        <span key={match.id}>
+          {i > 0 && ' > '}
+          {match.staticData?.title || match.routeId}
+        </span>
+      ))}
+    </nav>
+  )
+}
+```
+
+### Options
+
+<ParamField path="select" type="(matches: RouteMatch[]) => any">
+  Select specific data from matches.
+  
+  ```tsx
+  const titles = useMatches({
+    select: (matches) => matches.map(m => m.staticData?.title)
+  })
+  ```
+</ParamField>
+
+## useParentMatches
+
+Access parent route matches.
+
+```tsx
+import { useParentMatches } from '@tanstack/react-router'
+
+function ChildRoute() {
+  const parentMatches = useParentMatches()
+  
+  return (
+    <div>
+      Parent routes: {parentMatches.map(m => m.routeId).join(' > ')}
+    </div>
+  )
+}
+```
+
+## useChildMatches
+
+Access child route matches.
+
+```tsx
+import { useChildMatches } from '@tanstack/react-router'
+
+function ParentRoute() {
+  const childMatches = useChildMatches()
+  
+  return (
+    <div>
+      Has children: {childMatches.length > 0 ? 'Yes' : 'No'}
+    </div>
+  )
+}
+```
+
+## useMatchRoute
+
+Check if a route matches.
+
+```tsx
+import { useMatchRoute } from '@tanstack/react-router'
+
+function ConditionalNav() {
+  const matchRoute = useMatchRoute()
+  
+  const isPostsPage = matchRoute({ to: '/posts' })
+  const isAdminPage = matchRoute({ to: '/admin', fuzzy: true })
+  
+  return (
+    <nav>
+      {isPostsPage && <PostsNav />}
+      {isAdminPage && <AdminNav />}
+    </nav>
+  )
+}
+```
+
+## useBlocker
+
+Block navigation with confirmation.
+
+```tsx
+import { useBlocker } from '@tanstack/react-router'
+
+function EditForm() {
+  const [isDirty, setIsDirty] = useState(false)
+  
+  useBlocker({
+    blockerFn: async () => {
+      if (!isDirty) return true
+      
+      return window.confirm(
+        'You have unsaved changes. Are you sure you want to leave?'
+      )
+    },
+    enableBeforeUnload: isDirty
+  })
+  
+  return <form onChange={() => setIsDirty(true)}>...</form>
+}
+```
+
+### Options
+
+<ParamField path="blockerFn" type="BlockerFn" required>
+  Function to determine if navigation should be blocked.
+  
+  ```tsx
+  blockerFn: async ({ currentLocation, nextLocation, action }) => {
+    return window.confirm('Leave page?')
+  }
+  ```
+</ParamField>
+
+<ParamField path="enableBeforeUnload" type="boolean | (() => boolean)">
+  Enable browser beforeunload warning.
+  
+  ```tsx
+  enableBeforeUnload: isDirty
+  enableBeforeUnload: () => form.hasChanges()
+  ```
+</ParamField>
+
+## useCanGoBack
+
+Check if the router can navigate back.
+
+```tsx
+import { useCanGoBack, useRouter } from '@tanstack/react-router'
+
+function BackButton() {
+  const router = useRouter()
+  const canGoBack = useCanGoBack()
+  
+  if (!canGoBack) {
+    return null
+  }
+  
+  return (
+    <button onClick={() => router.history.back()}>
+      Back
+    </button>
+  )
+}
+```
+
+## useAwaited
+
+Await deferred promises in components.
+
+```tsx
+import { useAwaited, Await } from '@tanstack/react-router'
+import { defer } from '@tanstack/react-router'
+
+const postRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/posts/$postId',
+  loader: async ({ params }) => {
+    const post = await fetchPost(params.postId)
+    const relatedPosts = defer(fetchRelatedPosts(params.postId))
+    
+    return { post, relatedPosts }
+  }
+})
+
+function PostDetails() {
+  const { post, relatedPosts } = postRoute.useLoaderData()
+  
+  return (
+    <div>
+      <h1>{post.title}</h1>
+      
+      <Suspense fallback={<div>Loading related...</div>}>
+        <Await promise={relatedPosts}>
+          {(related) => (
+            <RelatedPosts posts={related} />
+          )}
+        </Await>
+      </Suspense>
+    </div>
+  )
+}
+```
+
+## Examples
+
+### Global Loading State
+
+```tsx
+import { useRouterState } from '@tanstack/react-router'
+
+function GlobalLoadingBar() {
+  const isLoading = useRouterState({ 
+    select: (s) => s.isLoading 
+  })
+  
+  if (!isLoading) return null
+  
+  return (
+    <div className="fixed top-0 left-0 right-0 h-1 bg-blue-600 animate-pulse" />
+  )
+}
+```
+
+### Authentication Check
+
+```tsx
+import { useRouteContext, Navigate } from '@tanstack/react-router'
+
+function ProtectedRoute({ children }) {
+  const { user } = useRouteContext({ from: '__root__' })
+  
+  if (!user) {
+    return <Navigate to="/login" replace />
+  }
+  
+  return children
+}
+```
+
+### Dynamic Title
+
+```tsx
+import { useMatches } from '@tanstack/react-router'
+import { useEffect } from 'react'
+
+function DynamicTitle() {
+  const matches = useMatches()
+  
+  useEffect(() => {
+    const titles = matches
+      .map(m => m.staticData?.title)
+      .filter(Boolean)
+    
+    document.title = titles.reverse().join(' | ')
+  }, [matches])
+  
+  return null
+}
+```
+
+### Form with Unsaved Changes
+
+```tsx
+import { useBlocker } from '@tanstack/react-router'
+import { useState } from 'react'
+
+function EditForm({ initialData }) {
+  const [data, setData] = useState(initialData)
+  const isDirty = JSON.stringify(data) !== JSON.stringify(initialData)
+  
+  useBlocker({
+    blockerFn: async () => {
+      if (!isDirty) return true
+      return window.confirm('Discard changes?')
+    },
+    enableBeforeUnload: isDirty
+  })
+  
+  return (
+    <form>
+      <input 
+        value={data.title}
+        onChange={(e) => setData({ ...data, title: e.target.value })}
+      />
+      {isDirty && <span className="text-orange-500">Unsaved changes</span>}
+    </form>
+  )
+}
+```

@@ -1,0 +1,218 @@
+---
+title: Router CLI
+description: Use the TanStack Router CLI to generate route files and manage your routing configuration
+---
+
+The TanStack Router CLI (`@tanstack/router-cli`) provides command-line tools for generating route files and watching for changes in your routing structure.
+
+## Installation
+
+Install the CLI as a development dependency:
+
+```bash
+npm install -D @tanstack/router-cli
+# or
+pnpm add -D @tanstack/router-cli
+# or
+yarn add -D @tanstack/router-cli
+```
+
+## Configuration
+
+Create a `tsr.config.json` file in your project root to configure the router generator:
+
+```json
+{
+  "routesDirectory": "./src/routes",
+  "generatedRouteTree": "./src/routeTree.gen.ts",
+  "quoteStyle": "single",
+  "semicolons": false,
+  "disableTypes": false,
+  "addExtensions": false,
+  "disableLogging": false
+}
+```
+
+### Configuration Options
+
+<ResponseField name="routesDirectory" type="string" default="./src/routes">
+  The directory where your route files are located
+</ResponseField>
+
+<ResponseField name="generatedRouteTree" type="string" default="./src/routeTree.gen.ts">
+  The path where the generated route tree file will be created
+</ResponseField>
+
+<ResponseField name="routeFilePrefix" type="string">
+  Optional prefix for route files (e.g., "route" would match "route.home.tsx")
+</ResponseField>
+
+<ResponseField name="routeFileIgnorePrefix" type="string" default="-">
+  Files starting with this prefix will be ignored by the route generator
+</ResponseField>
+
+<ResponseField name="routeFileIgnorePattern" type="string">
+  A regex pattern to match files that should be ignored
+</ResponseField>
+
+<ResponseField name="quoteStyle" type="'single' | 'double'" default="single">
+  The quote style to use in generated files
+</ResponseField>
+
+<ResponseField name="semicolons" type="boolean" default={false}>
+  Whether to include semicolons in generated files
+</ResponseField>
+
+<ResponseField name="disableTypes" type="boolean" default={false}>
+  Disable TypeScript type generation (outputs .js files instead)
+</ResponseField>
+
+<ResponseField name="disableLogging" type="boolean" default={false}>
+  Disable logging output from the CLI
+</ResponseField>
+
+<ResponseField name="addExtensions" type="boolean | string" default={false}>
+  Add file extensions to imports in generated files. Can be `true` for `.js` or a custom extension like `.ts`
+</ResponseField>
+
+<ResponseField name="routeTreeFileHeader" type="string[]">
+  Custom headers to add to the generated route tree file
+  
+  Default:
+  ```json
+  [
+    "/* eslint-disable */",
+    "// @ts-nocheck",
+    "// noinspection JSUnusedGlobalSymbols"
+  ]
+  ```
+</ResponseField>
+
+<ResponseField name="autoCodeSplitting" type="boolean">
+  Automatically enable code splitting for your routes
+</ResponseField>
+
+<ResponseField name="indexToken" type="string | RegExp | object" default="index">
+  The token to use for index routes (e.g., "index.tsx" matches index routes)
+</ResponseField>
+
+<ResponseField name="routeToken" type="string | RegExp | object" default="route">
+  The token to use for route files (e.g., "route.tsx" for file-based routing)
+</ResponseField>
+
+## CLI Commands
+
+The CLI provides two main commands:
+
+### generate
+
+Generate the route tree once:
+
+```bash
+npx tsr generate
+```
+
+This command:
+- Reads your route files from the configured `routesDirectory`
+- Generates a type-safe route tree file at the configured `generatedRouteTree` path
+- Creates TypeScript types for all routes, search params, and path params
+
+### watch
+
+Continuously watch for changes and regenerate routes:
+
+```bash
+npx tsr watch
+```
+
+This command:
+- Runs the generator initially
+- Watches your `routesDirectory` for changes
+- Automatically regenerates the route tree whenever files are added, modified, or deleted
+- Keeps running until manually stopped
+
+## Usage in Scripts
+
+Add the CLI commands to your `package.json` scripts:
+
+```json
+{
+  "scripts": {
+    "routes:generate": "tsr generate",
+    "routes:watch": "tsr watch",
+    "dev": "tsr watch --silent & vite"
+  }
+}
+```
+
+Then run:
+
+```bash
+npm run routes:generate  # Generate once
+npm run routes:watch     # Watch for changes
+npm run dev             # Development with auto-generation
+```
+
+## Generated Route Tree
+
+The CLI generates a route tree file that looks like this:
+
+```tsx
+/* eslint-disable */
+// @ts-nocheck
+// noinspection JSUnusedGlobalSymbols
+
+import { createFileRoute } from '@tanstack/react-router'
+
+// Route imports
+import { Route as rootRoute } from './routes/__root'
+import { Route as AboutRoute } from './routes/about'
+import { Route as IndexRoute } from './routes/index'
+
+// Route tree
+export const routeTree = rootRoute.addChildren([
+  AboutRoute,
+  IndexRoute,
+])
+```
+
+This generated file:
+- Is fully type-safe
+- Should not be edited manually (regenerated on changes)
+- Exports a `routeTree` you can pass to `createRouter()`
+- Can be safely committed to version control
+
+## Working Without the CLI
+
+While the CLI is the recommended approach, you can also use the bundler plugins instead:
+
+- [Vite Plugin](/router/tools/vite-plugin) - For Vite projects
+- [Bundler Plugins](/router/tools/bundler-plugins) - For Webpack, ESBuild, or Rspack
+
+These plugins integrate route generation directly into your build process.
+
+## Requirements
+
+- Node.js >= 20.19
+- A TypeScript or JavaScript project
+- File-based routing structure in your project
+
+## Troubleshooting
+
+### Routes not generating
+
+1. Check that your `routesDirectory` path is correct in `tsr.config.json`
+2. Ensure route files follow the naming convention (e.g., `route.tsx` or use custom `routeToken`)
+3. Verify the CLI has permission to write to the `generatedRouteTree` location
+
+### Type errors after generation
+
+1. Restart your TypeScript server in your IDE
+2. Run `tsc --noEmit` to check for type errors
+3. Ensure the generated file is not excluded in your `tsconfig.json`
+
+### Watch mode not detecting changes
+
+1. Ensure the process is still running
+2. Try stopping and restarting the watch command
+3. Check that your file system supports file watching
