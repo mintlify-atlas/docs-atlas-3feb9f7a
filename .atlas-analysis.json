@@ -1,0 +1,213 @@
+{
+  "projectType": "framework",
+  "projectName": "TanStack Router",
+  "projectDescription": "A fully type-safe, client-first router and full-stack framework for React, Solid, and Vue with built-in caching, prefetching, and server capabilities.",
+  "theme": "palm",
+  "primaryColor": "#00C9A7",
+  "lightColor": "#84E1C8",
+  "darkColor": "#00A085",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Router",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "router/introduction",
+              "router/installation",
+              "router/quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "router/concepts/routing",
+              "router/concepts/routes",
+              "router/concepts/type-safety",
+              "router/concepts/navigation",
+              "router/concepts/search-params",
+              "router/concepts/loaders",
+              "router/concepts/prefetching",
+              "router/concepts/caching"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "router/guides/file-based-routing",
+              "router/guides/code-based-routing",
+              "router/guides/nested-routes",
+              "router/guides/route-guards",
+              "router/guides/error-boundaries",
+              "router/guides/scroll-restoration",
+              "router/guides/ssr",
+              "router/guides/code-splitting"
+            ]
+          },
+          {
+            "group": "React API",
+            "pages": [
+              "router/react/router",
+              "router/react/route",
+              "router/react/link",
+              "router/react/hooks",
+              "router/react/components"
+            ]
+          },
+          {
+            "group": "Framework APIs",
+            "pages": [
+              "router/frameworks/solid",
+              "router/frameworks/vue"
+            ]
+          },
+          {
+            "group": "Plugins & Tools",
+            "pages": [
+              "router/tools/cli",
+              "router/tools/devtools",
+              "router/tools/vite-plugin",
+              "router/tools/bundler-plugins"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "router/advanced/validation",
+              "router/advanced/middleware",
+              "router/advanced/history",
+              "router/advanced/custom-routes"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Start",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "start/introduction",
+              "start/installation",
+              "start/quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "start/concepts/full-stack",
+              "start/concepts/server-functions",
+              "start/concepts/ssr",
+              "start/concepts/streaming",
+              "start/concepts/deployment"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "start/guides/server-functions",
+              "start/guides/data-fetching",
+              "start/guides/middleware",
+              "start/guides/api-routes",
+              "start/guides/deployment",
+              "start/guides/static-generation"
+            ]
+          },
+          {
+            "group": "React API",
+            "pages": [
+              "start/react/server-functions",
+              "start/react/client-functions",
+              "start/react/components"
+            ]
+          },
+          {
+            "group": "Framework APIs",
+            "pages": [
+              "start/frameworks/solid",
+              "start/frameworks/vue"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "start/config/vite-plugin",
+              "start/config/build-options",
+              "start/config/server-options"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Router Core",
+            "pages": [
+              "api/router/router",
+              "api/router/route",
+              "api/router/link",
+              "api/router/match",
+              "api/router/history"
+            ]
+          },
+          {
+            "group": "React Router",
+            "pages": [
+              "api/react-router/router",
+              "api/react-router/route",
+              "api/react-router/link",
+              "api/react-router/hooks",
+              "api/react-router/components"
+            ]
+          },
+          {
+            "group": "Start",
+            "pages": [
+              "api/start/server-functions",
+              "api/start/client-rpc",
+              "api/start/server-rpc"
+            ]
+          },
+          {
+            "group": "Plugins",
+            "pages": [
+              "api/plugins/vite",
+              "api/plugins/webpack",
+              "api/plugins/esbuild",
+              "api/plugins/rspack"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "End-to-end type safety for routes, params, and loaders",
+    "Schema-driven search params with validation",
+    "Built-in caching, prefetching, and invalidation",
+    "Nested layouts, transitions, and error boundaries",
+    "File-based and code-based routing",
+    "Full-stack capabilities with TanStack Start",
+    "Server functions with type-safe RPC",
+    "SSR and streaming support",
+    "Framework-agnostic core (React, Solid, Vue)",
+    "DevTools for debugging routing state"
+  ],
+  "publicApiSurface": [
+    "@tanstack/router-core - Router, Route, Link, history",
+    "@tanstack/react-router - React bindings and hooks",
+    "@tanstack/solid-router - Solid bindings",
+    "@tanstack/vue-router - Vue bindings",
+    "@tanstack/react-start - Full-stack React framework",
+    "@tanstack/solid-start - Full-stack Solid framework",
+    "@tanstack/vue-start - Full-stack Vue framework",
+    "@tanstack/router-cli - CLI for route generation",
+    "@tanstack/router-plugin - Universal bundler plugin",
+    "@tanstack/router-devtools - DevTools for debugging",
+    "@tanstack/zod-adapter - Zod validation adapter",
+    "@tanstack/valibot-adapter - Valibot validation adapter",
+    "@tanstack/arktype-adapter - ArkType validation adapter"
+  ]
+}
